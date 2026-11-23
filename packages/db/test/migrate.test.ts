@@ -55,11 +55,12 @@ describe('runMigrations', () => {
 
   it('loads the repository migrations with stable checksums', async () => {
     const migrations = await loadMigrations();
-    expect(migrations.map((x) => x.version)).toEqual(['0001_init']);
+    expect(migrations.map((x) => x.version)).toEqual(['0001_init', '0002_api_usage_tokens']);
     expect(migrations[0]?.checksum).toMatch(/^[0-9a-f]{64}$/);
     expect(migrations[0]?.sql).toContain("coalesce(heading_path, '')");
     expect(migrations[0]?.sql).toContain('vector_cosine_ops');
     expect(migrations[0]?.sql).toContain('CREATE TABLE api_usage');
+    expect(migrations[1]?.sql).toContain('ADD COLUMN prompt_tokens');
   });
 });
 

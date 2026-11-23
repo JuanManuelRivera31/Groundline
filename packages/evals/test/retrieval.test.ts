@@ -6,6 +6,7 @@ import { answerCandidate, unanswerableCandidate } from './fixtures.ts';
 
 const hit = (chunkId: number, url: string, score: number, cosine: number | null): CandidateHit => ({
   chunkId,
+  ord: 0,
   url,
   score,
   cosine,

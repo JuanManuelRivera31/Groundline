@@ -65,6 +65,11 @@ export interface ApiUsageInput {
   readonly estTokens: number;
   readonly httpStatus: number | null;
   readonly ingestRunId?: number | null | undefined;
+  /** Real token counts (generation only). */
+  readonly promptTokens?: number | null | undefined;
+  readonly outputTokens?: number | null | undefined;
+  readonly thoughtsTokens?: number | null | undefined;
+  readonly latencyMs?: number | null | undefined;
 }
 
 export interface IngestRunStart {
@@ -88,6 +93,8 @@ export interface IngestRunFinish {
 
 export interface SearchHit {
   readonly chunkId: number;
+  /** Position of the chunk inside its document. */
+  readonly ord: number;
   readonly score: number;
   readonly headingPath: string;
   readonly url: string;

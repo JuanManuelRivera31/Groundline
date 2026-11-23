@@ -15,10 +15,11 @@ import type {
 import { parseVectorLiteral, toVectorLiteral } from '../vector.ts';
 import { loadMigrations, runMigrations, type MigrationResult } from './migrate.ts';
 
-const SEARCH_COLUMNS = `c.id AS chunk_id, c.heading_path, c.url, c.content, d.title AS document_title`;
+const SEARCH_COLUMNS = `c.id AS chunk_id, c.ord, c.heading_path, c.url, c.content, d.title AS document_title`;
 
 interface SearchRow {
   chunk_id: string;
+  ord: number;
   /** float8 arrives as number, float4 (ts_rank_cd) may arrive as string depending on type parsers. */
   score: number | string;
   heading_path: string;
@@ -29,6 +30,7 @@ interface SearchRow {
 
 const toHit = (row: SearchRow): SearchHit => ({
   chunkId: Number(row.chunk_id),
+  ord: row.ord,
   score: Number(row.score),
   headingPath: row.heading_path,
   url: row.url,
@@ -199,9 +201,21 @@ export class PgDb implements Db {
 
   async recordApiUsage(usage: ApiUsageInput): Promise<void> {
     await this.#pool.query(
-      `INSERT INTO api_usage (kind, model, requests, est_tokens, http_status, ingest_run_id)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [usage.kind, usage.model, usage.requests, usage.estTokens, usage.httpStatus, usage.ingestRunId ?? null],
+      `INSERT INTO api_usage (kind, model, requests, est_tokens, http_status, ingest_run_id,
+                              prompt_tokens, output_tokens, thoughts_tokens, latency_ms)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        usage.kind,
+        usage.model,
+        usage.requests,
+        usage.estTokens,
+        usage.httpStatus,
+        usage.ingestRunId ?? null,
+        usage.promptTokens ?? null,
+        usage.outputTokens ?? null,
+        usage.thoughtsTokens ?? null,
+        usage.latencyMs ?? null,
+      ],
     );
   }
 

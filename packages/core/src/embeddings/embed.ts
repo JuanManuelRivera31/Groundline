@@ -26,6 +26,11 @@ export interface UsageEvent {
   readonly estTokens: number;
   /** HTTP status; 0 for network failures. */
   readonly httpStatus: number;
+  /** Real token counts and call latency (generation only). */
+  readonly promptTokens?: number | undefined;
+  readonly outputTokens?: number | undefined;
+  readonly thoughtsTokens?: number | undefined;
+  readonly latencyMs?: number | undefined;
 }
 
 export interface UsageRecorder {
