@@ -26,6 +26,24 @@ Vector search catches paraphrases. Full-text search catches exact product terms 
   3. document-level metrics break ties.
 - Query embeddings use the cache (`RETRIEVAL_QUERY`, usage kind `embed_query_eval`). The runner shows the requests needed and the quota remaining today before any call.
 
+## Results on dev v2 (2026-11-23)
+
+Six runs are recorded in `evals/runs/2026-11-23-*`: vector, fts, and four hybrid configurations, which is the cap.
+
+| Config | Section R@1 | R@5 | R@8 | MRR |
+| --- | --- | --- | --- | --- |
+| vector | 75.6% | 95.6% | **97.8%** | **0.837** |
+| fts | 26.7% | 60.0% | 64.4% | 0.379 |
+| hybrid k=60, c=20 | 48.9% | 84.4% | 93.3% | 0.641 |
+| hybrid k=20, c=20 | 48.9% | 84.4% | 93.3% | 0.641 |
+| hybrid k=60, c=10 (best hybrid) | 48.9% | 91.1% | 95.6% | 0.648 |
+| hybrid k=60, c=8 | 48.9% | 88.9% | 95.6% | 0.643 |
+
+- **Best hybrid configuration** by the rule: `k = 60, c = 10, N = 8`.
+- **Vector-only beats every hybrid configuration on dev at section level.** Equal-weight RRF lets a weak full-text list displace correct vector top-1 hits: 14 lost top-1 hits versus 2 gained.
+- **Recommendation for S3:** default to `vector` (c = 20, N = 8) and keep hybrid selectable.
+- Improving the full-text list or weighting the fusion is outside S2's tuning knobs (k, N, candidates). It is proposed in `docs/reports/s2.md`.
+
 ## Consequences
 
 - Hybrid retrieval costs one extra SQL query per question. There are no additional API calls, since the query is embedded once.
