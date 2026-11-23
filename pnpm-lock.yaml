@@ -202,6 +202,9 @@ importers:
       '@groundline/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@groundline/evals':
+        specifier: workspace:*
+        version: link:../../packages/evals
 
   packages/core:
     dependencies:
