@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { answerQuestion, generationLimitDefaults, maxSimilarity, planEmbeddings, PROMPT_VERSION, type AppConfig } from '@groundline/core';
@@ -20,7 +20,7 @@ import { cacheStoreFor, CHUNKS_FILE, DEV_FILE, errorMessage, loadConfig, REPO_RO
 import { assertSetAllowed } from '../retrieval.ts';
 import { parseJsonl, toJsonl, type EvalQuestion } from '../schema.ts';
 
-const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--dry-run] [--batch-size 10] [--max-requests N] | --set dev --external answers.csv [--label name]';
+const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--dry-run] [--batch-size 10] [--max-requests N] [--resume <run>.partial.jsonl] | --set dev --external answers.csv [--label name]';
 
 async function freeBase(base: string): Promise<string> {
   let candidate = base;
@@ -99,6 +99,7 @@ async function main(): Promise<void> {
       'dry-run': { type: 'boolean', default: false },
       'batch-size': { type: 'string', default: '10' },
       'max-requests': { type: 'string' },
+      resume: { type: 'string' },
       help: { type: 'boolean' },
     },
     strict: true,
@@ -132,16 +133,25 @@ async function main(): Promise<void> {
     const runtime = await createAnswerRuntime(config, db, { embedKind: 'embed_query_eval' });
     const { deps } = runtime;
 
+    // Checkpoint: every record is appended to <base>.partial.jsonl as soon as it exists,
+    // so an interrupted run resumes without spending quota twice.
+    const resumeFile = values.resume ? resolve(values.resume) : undefined;
+    if (resumeFile && !resumeFile.endsWith('.partial.jsonl')) throw new Error('--resume expects a <run>.partial.jsonl file.');
+    const done: AnswerRecord[] = resumeFile ? (parseJsonl(await readFile(resumeFile, 'utf8')) as AnswerRecord[]) : [];
+    const doneIds = new Set(done.map((r) => r.id));
+    const todo = questions.filter((q) => !doneIds.has(q.id));
+    if (resumeFile) console.log(`Resuming ${rel(resumeFile)}: ${done.length} questions already answered, ${todo.length} to go.`);
+
     // Exact plan from cached embeddings: which questions the floor will short-circuit.
-    const plan = await planEmbeddings(cacheStoreFor(db), config.embedding, questions.map((q) => q.question), 'RETRIEVAL_QUERY');
+    const plan = await planEmbeddings(cacheStoreFor(db), config.embedding, todo.map((q) => q.question), 'RETRIEVAL_QUERY');
     let floorHits = 0;
-    for (const [i, q] of questions.entries()) {
+    for (const [i, q] of todo.entries()) {
       const vector = plan.cached.get(plan.keys[i] ?? '');
       if (!vector) continue;
       const ranked = await deps.retrieve(q.question, vector, deps.config.candidates);
       if (maxSimilarity(ranked) < deps.config.floor) floorHits++;
     }
-    const generationNeeded = questions.length - floorHits;
+    const generationNeeded = todo.length - floorHits;
     const g = runtime.generationQuota;
     const e = runtime.embeddingQuota;
     console.log(`Dev set: ${questions.length} questions | model ${config.generation.model} | prompt ${PROMPT_VERSION} | floor ${deps.config.floor.toFixed(3)}`);
@@ -158,10 +168,19 @@ async function main(): Promise<void> {
     if (generationNeeded > g.remaining) throw new Error(`Not enough generation quota: need ${generationNeeded}, ${g.remaining} remain today.`);
     if (plan.misses.length > e.remaining) throw new Error(`Not enough embedding quota: need ${plan.misses.length}, ${e.remaining} remain today.`);
 
-    const records: AnswerRecord[] = [];
+    await mkdir(RUNS_DIR, { recursive: true });
+    const base = resumeFile
+      ? resumeFile.replace(/\.partial\.jsonl$/, '')
+      : await freeBase(join(RUNS_DIR, `${new Date().toISOString().slice(0, 10)}-answers${label ? `-${label}` : ''}`));
+    const partialFile = `${base}.partial.jsonl`;
+    if (!resumeFile && existsSync(partialFile)) throw new Error(`${rel(partialFile)} exists; pass --resume ${rel(partialFile)}.`);
+    console.log(`Checkpoint: ${rel(partialFile)}`);
+
+    const records: AnswerRecord[] = [...done];
     let failure: unknown;
     let spent = 0;
-    for (const [i, q] of questions.entries()) {
+    for (const q of todo) {
+      const i = questions.indexOf(q);
       // Worst case for one question is 1 + maxRetries attempts; stop before the cap could be crossed.
       if (spent + 1 + config.embedding.maxRetries > maxRequests) {
         failure = new Error(`Stopped before ${q.id}: ${spent} generation requests used, cap ${maxRequests} (retries on 429/5xx). Partial run saved.`);
@@ -172,6 +191,7 @@ async function main(): Promise<void> {
         const result = await answerQuestion(deps, q.question);
         const record = toAnswerRecord(q, result);
         records.push(record);
+        await appendFile(partialFile, toJsonl([record]), 'utf8');
         spent += record.usage.generationRequests;
         console.log(
           `[${String(i + 1).padStart(2)}/${questions.length}] ${q.id} ${q.expected_behavior.padEnd(7)} -> ${record.status.padEnd(12)}` +
@@ -184,9 +204,14 @@ async function main(): Promise<void> {
       }
     }
 
-    await mkdir(RUNS_DIR, { recursive: true });
+    if (failure !== undefined) {
+      console.error(`Run incomplete: ${records.length}/${questions.length} answered. Resume with --resume ${rel(partialFile)}`);
+      throw failure instanceof Error ? failure : new Error(errorMessage(failure));
+    }
+    // Keep question order regardless of resumes.
+    const order = new Map(questions.map((q, i) => [q.id, i]));
+    records.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     const createdAt = new Date().toISOString();
-    const base = await freeBase(join(RUNS_DIR, `${createdAt.slice(0, 10)}-answers${label ? `-${label}` : ''}`));
     const metrics = computeCodeMetrics(records);
     const partial = records.length < questions.length;
     const payload = { kind: 'answers', set: 'dev', label, createdAt, partial, promptVersion: PROMPT_VERSION, config: configSummary(config), metrics, records };
@@ -199,7 +224,7 @@ async function main(): Promise<void> {
     const dir = await writeJudgeBatches(base, records.map(judgeItemFromRecord), batchSize);
     console.log(`\nBehavior accuracy ${pct(metrics.behavior.overall.value)} | citation precision (doc) ${pct(metrics.citations.documentPrecision.value)} | p95 ${(metrics.latencyMs.all.p95 / 1000).toFixed(2)} s`);
     console.log(`Run: ${rel(base)}.json | judge batches: ${rel(dir)}/ | judgments go to ${rel(base)}-judgments/`);
-    if (failure !== undefined) throw failure instanceof Error ? failure : new Error(errorMessage(failure));
+    await rm(partialFile, { force: true });
   } finally {
     await db.close();
   }
