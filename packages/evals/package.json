@@ -1,0 +1,19 @@
+{
+  "name": "@groundline/evals",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Evaluation sets, retrieval metrics and eval runners (Node).",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@groundline/core": "workspace:*",
+    "@groundline/db": "workspace:*"
+  }
+}

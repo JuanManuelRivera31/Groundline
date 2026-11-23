@@ -20,7 +20,9 @@
     "ingest": "node apps/ingest/src/cli/ingest.ts",
     "search:debug": "node apps/ingest/src/cli/search-debug.ts",
     "chunks:stats": "node apps/ingest/src/cli/chunks-stats.ts",
-    "corpus:export": "node apps/ingest/src/cli/corpus-export.ts"
+    "corpus:export": "node apps/ingest/src/cli/corpus-export.ts",
+    "eval:build-sets": "node packages/evals/src/cli/build-sets.ts",
+    "eval:retrieval": "node packages/evals/src/cli/eval-retrieval.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

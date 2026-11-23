@@ -222,6 +222,15 @@ importers:
         specifier: 8.23.1
         version: 8.23.1
 
+  packages/evals:
+    dependencies:
+      '@groundline/core':
+        specifier: workspace:*
+        version: link:../core
+      '@groundline/db':
+        specifier: workspace:*
+        version: link:../db
+
 packages:
 
   '@cacheable/memory@2.2.0':

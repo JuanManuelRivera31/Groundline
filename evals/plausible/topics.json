@@ -1,0 +1,50 @@
+{
+  "description": "Document-to-topic map used to stratify answerable eval questions. Paths are relative to the docs root of plausible/docs. Excluded documents have no customer-support value.",
+  "topics": {
+    "billing_account": [
+      "2fa.md", "account-settings.md", "agencies-and-freelancers.md", "billing.md", "cancel-subscription.md",
+      "change-domain-name.md", "change-email.md", "change-plan.md", "compliance.md", "data-access.md",
+      "delete-account.md", "delete-site-data.md", "download-invoices.md", "general.md", "invoice-email.md",
+      "login-management.md", "nonprofit-and-education-pricing.md", "register-account.md", "reset-password.md",
+      "reset-site-data.md", "sso.md", "sso-google-workspaces.md", "sso-ms-entra.md", "sso-okta.md",
+      "subscription-plans.md", "team-settings.md", "transfer-account-ownership.md", "transfer-ownership.md",
+      "trial.md", "trial-to-paid.md", "users-roles.md", "website-settings.md"
+    ],
+    "install_integrations": [
+      "add-website.md", "amp-pages.md", "buttondown.md", "carrd-integration.md", "consent-management-platforms.md",
+      "csv-import.md", "discourse-integration.md", "docusaurus-integration.md", "excluding.md",
+      "excluding-localstorage.md", "ghost-integration.md", "google-analytics-import.md",
+      "google-search-console-integration.md", "google-tag-manager-integration.md", "hash-based-routing.md",
+      "hubspot-analytics.md", "hugo-integration.md", "integration-guides.md", "mediawiki-integration.md",
+      "nextjs-integration.md", "npm-package.md", "odoo-integration.md", "plausible-script.md",
+      "proxy/introduction.md", "proxy/guides/akamai.md", "proxy/guides/apache.md", "proxy/guides/caddy.md",
+      "proxy/guides/cloudflare.md", "proxy/guides/cloudfront.md", "proxy/guides/deno.md", "proxy/guides/fastly.md",
+      "proxy/guides/fresh.md", "proxy/guides/laravel.md", "proxy/guides/netlify.md", "proxy/guides/nextjs.md",
+      "proxy/guides/nginx.md", "proxy/guides/vercel.md", "proxy/guides/wordpress.md", "script-extensions.md",
+      "script-update-guide.md", "shopify-integration.md", "spa-support.md", "squarespace-integration.md",
+      "subdomain-hostname-filter.md", "troubleshoot-integration.md", "webflow-integration.md",
+      "wix-integration.md", "wordpress-integration.md"
+    ],
+    "dashboard_metrics": [
+      "ab-testing.md", "annotations.md", "bot-traffic-filtering.md", "browser-language.md", "compare-stats.md",
+      "consolidated-views.md", "content-impressions-tracking.md", "core-web-vitals.md", "countries.md",
+      "custom-automatic-link-tracking.md", "custom-event-goals.md", "custom-locations.md",
+      "custom-props/for-custom-events.md", "custom-props/for-pageviews.md", "custom-props/introduction.md",
+      "custom-props/props-dashboard.md", "custom-query-params.md", "dashboard-appearance.md", "dashboard-faq.md",
+      "devices.md", "ecommerce-revenue-tracking.md", "email-phone-link-tracking.md", "email-reports.md",
+      "embed-dashboard.md", "error-pages-tracking-404.md", "export-stats.md", "file-downloads-tracking.md",
+      "filters-segments.md", "form-submissions-tracking.md", "funnel-analysis.md", "goal-conversions.md",
+      "guided-tour.md", "keyboard-shortcuts.md", "landing-page.md", "manual-link-tagging.md",
+      "metrics-definitions.md", "outbound-link-click-tracking.md", "page-titles.md", "pageview-goals.md",
+      "realtime-dashboard.md", "screen-resolution.md", "scroll-depth.md", "shared-links.md", "site-search.md",
+      "slack-reports.md", "stop-tracking-utm-tags.md", "time-spent-tracking.md", "top-pages.md",
+      "top-referrers.md", "traffic-spikes.md", "user-journeys.md", "visibility.md", "your-plausible-experience.md"
+    ],
+    "api": [
+      "data-pipelines.md", "events-api.md", "get-started-with-postman.md", "looker-studio.md",
+      "raw-data-export.md", "sites-api.md", "stats-api.md", "stats-api-playground.md", "stats-api-v1.md",
+      "white-label.md"
+    ]
+  },
+  "excluded": ["authors.md", "contribute.md", "introduction.md", "plausible-analytics-reviews.md"]
+}
