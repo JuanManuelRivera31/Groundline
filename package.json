@@ -1,0 +1,32 @@
+{
+  "name": "groundline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable AI support agent kit that answers only from a company's docs, with citations.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit && pnpm -r run typecheck",
+    "test": "vitest run",
+    "build": "pnpm -r run build",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:migrate": "node apps/ingest/src/cli/migrate.ts",
+    "ingest": "node apps/ingest/src/cli/ingest.ts",
+    "search:debug": "node apps/ingest/src/cli/search-debug.ts",
+    "chunks:stats": "node apps/ingest/src/cli/chunks-stats.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.6.6",
+    "eslint": "10.15.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.73.0",
+    "vitest": "5.1.1"
+  }
+}
