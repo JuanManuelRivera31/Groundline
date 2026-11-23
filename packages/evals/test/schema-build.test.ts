@@ -38,6 +38,9 @@ describe('validateQuestion', () => {
     expect(validateQuestion(email, index).join()).toMatch(/non-example email/);
     const ok = { ...withoutId(answerCandidate('a', ['c_a1'])), question: 'change my email to jane@example.com please' };
     expect(validateQuestion(ok, index)).toEqual([]);
+    const vendor = { ...withoutId(answerCandidate('a', ['c_a1'])), reference_answer: 'Write to hello@vendor.test or hello@plausible.io.' };
+    expect(validateQuestion(vendor, index).join()).toMatch(/non-example email hello@plausible.io/);
+    expect(validateQuestion(vendor, index, { vendorEmailDomains: ['plausible.io'] })).toEqual([]);
     expect(validateQuestion({ ...withoutId(answerCandidate('a', ['c_a1'])), category: 'weather' }, index).join()).toMatch(/unknown category/);
   });
 });
@@ -75,6 +78,14 @@ describe('buildSets', () => {
     // a and b (both on c_a1) always land together.
     const sets = [result.dev, result.test].map((s) => s.filter((q) => q.source_chunk_ids.includes('c_a1')).length);
     expect(sets.sort()).toEqual([0, 2]);
+  });
+
+  it('lets an answer and a handoff question on the same chunk go to different sets', () => {
+    const handoff = { ...unanswerableCandidate('h', 'account_action'), expected_urls: ['https://x.test/docs/billing#refunds'], source_chunk_ids: ['c_a1'] };
+    const result = buildSets([answerCandidate('a', ['c_a1']), handoff], index, options({ dev: { account_action: 1 }, test: { billing_account: 1 } }));
+    expect(result.shortfalls).toEqual([]);
+    expect(result.dev.map((q) => q.category)).toEqual(['account_action']);
+    expect(result.test.map((q) => q.category)).toEqual(['billing_account']);
   });
 
   it('enforces the per-document cap and reports shortfalls', () => {

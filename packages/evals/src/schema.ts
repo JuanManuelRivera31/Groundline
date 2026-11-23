@@ -78,8 +78,13 @@ const ALLOWED_EMAIL_DOMAIN = /(^|\.)example\.(com|org|net)$|\.test$/i;
 
 const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every((v) => typeof v === 'string');
 
+export interface ValidateOptions {
+  /** Public vendor domains whose documented addresses may appear (e.g. a support address quoted in the docs). */
+  readonly vendorEmailDomains?: readonly string[];
+}
+
 /** Validates one question draft (with or without id). Returns a list of problems; empty means valid. */
-export function validateQuestion(value: unknown, index: ChunkIndex): string[] {
+export function validateQuestion(value: unknown, index: ChunkIndex, options: ValidateOptions = {}): string[] {
   const errors: string[] = [];
   if (value === null || typeof value !== 'object') return ['not an object'];
   const q = value as Record<string, unknown>;
@@ -144,7 +149,9 @@ export function validateQuestion(value: unknown, index: ChunkIndex): string[] {
 
   const text = [question, reference, ...factList].join(' ');
   for (const match of text.matchAll(EMAIL)) {
-    if (!ALLOWED_EMAIL_DOMAIN.test(match[1] ?? '')) errors.push(`non-example email ${match[0]}`);
+    const domain = (match[1] ?? '').toLowerCase();
+    const vendor = (options.vendorEmailDomains ?? []).includes(domain);
+    if (!vendor && !ALLOWED_EMAIL_DOMAIN.test(domain)) errors.push(`non-example email ${match[0]}`);
   }
   return errors;
 }

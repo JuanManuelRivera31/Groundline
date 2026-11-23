@@ -126,7 +126,10 @@ export function buildSets(candidates: readonly Candidate[], index: ChunkIndex, o
       const a = kept[i];
       const b = kept[j];
       if (!a || !b) continue;
-      const shareChunk = a.source_chunk_ids.some((id) => b.source_chunk_ids.includes(id));
+      // Same evidence + same task => likely paraphrases. An answer question and a handoff
+      // question about the same chunk are different tasks and may go to different sets.
+      const shareChunk =
+        a.expected_behavior === b.expected_behavior && a.source_chunk_ids.some((id) => b.source_chunk_ids.includes(id));
       if (shareChunk || jaccard(tok(a), tok(b)) >= options.nearThreshold) union(i, j);
     }
   }

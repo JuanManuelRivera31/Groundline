@@ -10,6 +10,8 @@ import { ALL_CATEGORIES, BEHAVIORS, chunkIndex, FIELD_ORDER, parseJsonl, toJsonl
 const TEST_FILE = join(SETS_DIR, 'test.jsonl');
 const VERIFIED_DIR = join(EVAL_WORK_DIR, 'verified');
 const AUDIT_SEED = 20261123;
+// Public addresses of the documented vendor (quoted in the docs) are not personal data.
+const VENDOR_EMAIL_DOMAINS = ['plausible.io'];
 const AUDIT_SIZE = 20;
 const CORPUS = { repo: 'https://github.com/plausible/docs', commit: 'e9a092a987cffc3b29fd546d7cda17534860b83b' };
 
@@ -66,7 +68,7 @@ async function main(): Promise<void> {
   for (const v of verdicts) {
     if (v.verdict === 'discard') continue;
     if (!v.record) throw new Error(`Verdict ${v.verdict} for ${v.candidate_id} has no record.`);
-    const errors = validateQuestion(v.record, index);
+    const errors = validateQuestion(v.record, index, { vendorEmailDomains: VENDOR_EMAIL_DOMAINS });
     if (errors.length > 0) {
       invalid.push(`${v.candidate_id}: ${errors.join('; ')}`);
       continue;
