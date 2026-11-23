@@ -1,0 +1,27 @@
+# Local Postgres + pgvector for development. Not used in CI.
+# Port defaults to 54329 to avoid clashing with other local Postgres instances
+# (5431/5432). Override with PG_PORT in .env.
+name: groundline
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-groundline}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-groundline}
+      POSTGRES_DB: ${POSTGRES_DB:-groundline}
+    ports:
+      - "127.0.0.1:${PG_PORT:-54329}:5432"
+    volumes:
+      # Postgres 18+ images declare the volume at /var/lib/postgresql
+      # (PGDATA is /var/lib/postgresql/18/docker).
+      - groundline_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  groundline_pgdata:
