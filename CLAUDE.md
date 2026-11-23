@@ -12,6 +12,7 @@ Groundline is a reusable AI support-agent kit. It answers customer questions **o
 6. **Git.** Make small commits using Conventional Commits. A normal `git push` to `origin` (`main`) is allowed when a block of work closes green: `pnpm lint`, `pnpm typecheck` and `pnpm test` pass, and `git status` shows neither `.env` nor `data/`. Force-push, `reset --hard` and deleting branches remain forbidden.
 7. **One short ADR per architecture decision**, in `docs/adr/`.
 8. **Verify, don't recall.** Check versions, model names and APIs against official docs, and cite the URL in the ADR.
+9. **Frozen test set.** Never read, print or use evals/plausible/test.jsonl to tune anything. Only the final run command reads it, with explicit owner approval.
 
 ## Commands
 
@@ -27,6 +28,9 @@ Groundline is a reusable AI support-agent kit. It answers customer questions **o
 | `pnpm ingest --source plausible [--dry-run]` | Clone the pinned corpus, chunk, embed (cache-first), upsert, delete stale rows |
 | `pnpm search:debug "<question>"` | Top 5 vector and top 5 full-text hits, shown separately |
 | `pnpm chunks:stats --source plausible` | Chunk quality report from the local checkout (no network) |
+| `pnpm corpus:export --source plausible` | Write `data/eval-work/chunks.jsonl` (stable chunk ids; no network, no DB) |
+| `pnpm eval:build-sets` | Build and freeze `evals/plausible/{dev,test}.jsonl` from verified candidates (write-once) |
+| `pnpm eval:retrieval --set dev --mode vector\|fts\|hybrid\|all` | Retrieval metrics on dev (refuses `--set test`); writes `evals/runs/` |
 
 Node 26 runs the TypeScript sources directly (type stripping), so there is no compile step for the CLIs.
 
@@ -37,12 +41,16 @@ packages/core     Runtime-agnostic logic (Node + Workers): markdown/MDX cleaning
                   Docusaurus URL mapping, Gemini client, cache keys, rate limiter, config.
                   No node:* imports, no process/Buffer (lint-enforced).
 packages/db       SQL migrations, Db interface, Node adapter (pg). Workers adapter: deployment session.
-apps/ingest       Node-only CLIs: ingest, search:debug, db:migrate, chunks:stats.
+packages/evals    Eval schema, set builder, retrieval metrics (Wilson, AUC + bootstrap), runners.
+apps/ingest       Node-only CLIs: ingest, search:debug, db:migrate, chunks:stats, corpus:export.
+evals/plausible   Frozen eval sets (CC BY-SA 4.0), MANIFEST.json, audit sample, topic map.
+evals/runs        Recorded eval runs (config, metrics, per-question results; no doc text).
 docs/adr          Architecture decision records.
-data/             Gitignored: cloned corpora.
+docs/reports      Session reports.
+data/             Gitignored: cloned corpora, eval work files.
 ```
 
-Later sessions add `apps/api` (Hono on Workers), `apps/widget`, `apps/admin` and `packages/evals`.
+Later sessions add `apps/api` (Hono on Workers), `apps/widget` and `apps/admin`.
 
 ## Conventions
 

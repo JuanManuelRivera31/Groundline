@@ -1,0 +1,27 @@
+Plausible demo evaluation sets (dev.jsonl, test.jsonl, audit_sample.csv)
+=======================================================================
+
+These evaluation questions, reference answers and key facts are derived from
+the Plausible Analytics documentation:
+
+  https://github.com/plausible/docs
+  (pinned commit e9a092a987cffc3b29fd546d7cda17534860b83b)
+  Copyright (c) Plausible Analytics and contributors.
+
+The original documentation is licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0). As an
+adaptation of that material, the files in this directory are licensed under
+the same license:
+
+  CC BY-SA 4.0 — https://creativecommons.org/licenses/by-sa/4.0/
+  Legal code   — https://creativecommons.org/licenses/by-sa/4.0/legalcode
+
+Changes: questions were written and answers summarized from the documentation
+by AI subagents and then verified against the source text (see MANIFEST.json
+and docs/adr/0007-evaluation-sets.md). Expected URLs link to the original pages
+on https://plausible.io/docs.
+
+Unofficial demo. Not affiliated with or endorsed by Plausible Analytics.
+
+The rest of this repository (source code) is licensed under the MIT License;
+see the LICENSE file at the repository root.

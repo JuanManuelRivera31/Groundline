@@ -1,0 +1,119 @@
+{
+  "description": "Frozen retrieval/answer eval sets for the Plausible demo corpus. Never tune on test.jsonl.",
+  "created_at": "2026-11-23T06:28:46.426Z",
+  "corpus": {
+    "repo": "https://github.com/plausible/docs",
+    "commit": "e9a092a987cffc3b29fd546d7cda17534860b83b",
+    "chunks_file_sha256": "87990265d18e539e7fff2c9ada2697d44cb5a8c487dfe3167388dc81046784dc",
+    "chunks": 789
+  },
+  "chunker": "ADR-0004 (heading-aware, subtree folding, 500-token cap)",
+  "generation": {
+    "generator": "Claude Sonnet subagents, one per topic plus one for unanswerable questions",
+    "verifier": "Separate Claude Opus subagents, checking every label against its source chunk text"
+  },
+  "split": {
+    "seed": 20261123,
+    "targets": {
+      "dev": {
+        "billing_account": 16,
+        "install_integrations": 14,
+        "dashboard_metrics": 11,
+        "api": 4,
+        "not_covered": 6,
+        "off_topic": 2,
+        "competitor": 2,
+        "account_action": 3,
+        "prompt_injection": 2
+      },
+      "test": {
+        "billing_account": 31,
+        "install_integrations": 25,
+        "dashboard_metrics": 20,
+        "api": 9,
+        "not_covered": 14,
+        "off_topic": 5,
+        "competitor": 5,
+        "account_action": 6,
+        "prompt_injection": 5
+      }
+    },
+    "doc_cap": {
+      "dev": 3,
+      "test": 6
+    },
+    "duplicate_threshold": 0.8,
+    "near_threshold": 0.6,
+    "max_dev_test_jaccard": 0.357
+  },
+  "verification": {
+    "candidates": 239,
+    "kept": 204,
+    "corrected": 33,
+    "discarded": 2,
+    "duplicates_dropped_by_builder": 0,
+    "unused_after_split": 57
+  },
+  "sets": {
+    "dev": {
+      "file": "dev.jsonl",
+      "sha256": "38b27d02a5007dc5a530afba7e5a95e0304dc9ca88a6af880e8bb85342ab7909",
+      "total": 60,
+      "by_behavior": {
+        "answer": 45,
+        "abstain": 8,
+        "handoff": 3,
+        "decline": 4
+      },
+      "by_category": {
+        "billing_account": 16,
+        "install_integrations": 14,
+        "dashboard_metrics": 11,
+        "api": 4,
+        "not_covered": 6,
+        "off_topic": 2,
+        "competitor": 2,
+        "account_action": 3,
+        "prompt_injection": 2
+      },
+      "max_doc_share": {
+        "doc": "trial.md",
+        "count": 3,
+        "share": 0.05
+      }
+    },
+    "test": {
+      "file": "test.jsonl",
+      "sha256": "44121cce79769bd6c7bb175d307c7e4b8995fa7f858b176f0ce650fb0c5bf9a7",
+      "total": 120,
+      "by_behavior": {
+        "answer": 85,
+        "abstain": 19,
+        "handoff": 6,
+        "decline": 10
+      },
+      "by_category": {
+        "billing_account": 31,
+        "install_integrations": 25,
+        "dashboard_metrics": 20,
+        "api": 9,
+        "not_covered": 14,
+        "off_topic": 5,
+        "competitor": 5,
+        "account_action": 6,
+        "prompt_injection": 5
+      },
+      "max_doc_share": {
+        "doc": "billing.md",
+        "count": 6,
+        "share": 0.05
+      }
+    }
+  },
+  "audit_sample": {
+    "file": "audit_sample.csv",
+    "seed": 20261123,
+    "size": 20,
+    "source": "test.jsonl"
+  }
+}
