@@ -1,0 +1,17 @@
+Groundline (working name)
+Copyright (c) 2026 Groundline contributors. Source code licensed under the MIT License (see LICENSE).
+
+Demo corpus
+-----------
+The demo deployment indexes the Plausible Analytics documentation:
+  https://github.com/plausible/docs
+  Copyright (c) Plausible Analytics and contributors.
+  Licensed under the Creative Commons Attribution-ShareAlike 4.0 International
+  License (CC BY-SA 4.0): https://creativecommons.org/licenses/by-sa/4.0/
+
+The documentation is downloaded at ingest time into data/ (not distributed with
+this repository). Retrieved passages are shown with a link to their original
+page on https://plausible.io/docs. Any redistributed adaptation of that content
+must be shared under CC BY-SA 4.0.
+
+Unofficial demo. Not affiliated with or endorsed by Plausible Analytics.
