@@ -19,7 +19,8 @@
     "db:migrate": "node apps/ingest/src/cli/migrate.ts",
     "ingest": "node apps/ingest/src/cli/ingest.ts",
     "search:debug": "node apps/ingest/src/cli/search-debug.ts",
-    "chunks:stats": "node apps/ingest/src/cli/chunks-stats.ts"
+    "chunks:stats": "node apps/ingest/src/cli/chunks-stats.ts",
+    "corpus:export": "node apps/ingest/src/cli/corpus-export.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
