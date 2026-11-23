@@ -3,6 +3,7 @@ import type { CandidateHit, CandidateLists } from '@groundline/db';
 import {
   bootstrapAuc,
   distribution,
+  quantile,
   firstHitRank,
   rankMetrics,
   type Distribution,
@@ -110,6 +111,15 @@ export interface RetrievalMetrics {
     /** AUC of max cosine separating "answer" from "abstain" only, with a 95% bootstrap interval. */
     readonly aucAnswerVsAbstain: Interval & { readonly nAnswer: number; readonly nAbstain: number; readonly resamples: number; readonly seed: number };
     readonly distributions: Readonly<Record<ExpectedBehavior, Distribution>>;
+    /** Threshold view: how a simple max-cosine cut at the abstain p90 would behave. */
+    readonly thresholdView: {
+      readonly answerMedian: number;
+      readonly answerP10: number;
+      readonly abstainMedian: number;
+      readonly abstainP90: number;
+      /** "answer" questions whose max cosine is below the abstain p90 (would be wrongly rejected). */
+      readonly answerBelowAbstainP90: number;
+    };
   };
 }
 
@@ -151,6 +161,16 @@ export function evaluateRetrieval(
   const answerSignal = signalOf('answer');
   const abstainSignal = signalOf('abstain');
   const distributions = Object.fromEntries(BEHAVIORS.map((b) => [b, distribution(signalOf(b))])) as Record<ExpectedBehavior, Distribution>;
+  const sortedAnswer = [...answerSignal].sort((a, b) => a - b);
+  const sortedAbstain = [...abstainSignal].sort((a, b) => a - b);
+  const abstainP90 = quantile(sortedAbstain, 0.9);
+  const thresholdView = {
+    answerMedian: quantile(sortedAnswer, 0.5),
+    answerP10: quantile(sortedAnswer, 0.1),
+    abstainMedian: quantile(sortedAbstain, 0.5),
+    abstainP90,
+    answerBelowAbstainP90: answerSignal.filter((s) => s < abstainP90).length,
+  };
 
   return {
     config,
@@ -166,6 +186,7 @@ export function evaluateRetrieval(
           ...BOOTSTRAP,
         },
         distributions,
+        thresholdView,
       },
     },
     perQuestion,
@@ -199,6 +220,12 @@ export function runSummaryMarkdown(run: RetrievalRun, meta: { readonly set: stri
   lines.push(
     `Max-cosine AUC (answer vs abstain): ${num(auc.value)} [95% bootstrap ${num(auc.lo)}–${num(auc.hi)}], ` +
       `n=${auc.nAnswer}/${auc.nAbstain}, ${auc.resamples} resamples, seed ${auc.seed}`,
+  );
+  lines.push('');
+  const tv = metrics.signal.thresholdView;
+  lines.push(
+    `Threshold view: answer median ${num(tv.answerMedian)}, p10 ${num(tv.answerP10)}; abstain median ${num(tv.abstainMedian)}, ` +
+      `p90 ${num(tv.abstainP90)}; answer questions below the abstain p90: ${tv.answerBelowAbstainP90} of ${auc.nAnswer}`,
   );
   lines.push('');
   lines.push('| Behavior | n | min | p25 | median | p75 | max |');

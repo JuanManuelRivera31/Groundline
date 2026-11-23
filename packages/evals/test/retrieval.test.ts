@@ -75,6 +75,10 @@ describe('evaluateRetrieval', () => {
     expect(run.metrics.document.recall['8']?.hits).toBe(2);
     expect(run.metrics.document.mrr).toBeCloseTo((1 + 1 / 2) / 2, 12);
     expect(run.metrics.signal.aucAnswerVsAbstain).toMatchObject({ value: 1, nAnswer: 2, nAbstain: 2, resamples: 2000 });
+    const tv = run.metrics.signal.thresholdView;
+    expect(tv.abstainP90).toBeCloseTo(0.59, 12); // type-7 quantile of [0.5, 0.6]
+    expect(tv.answerP10).toBeCloseTo(0.755, 12); // of [0.75, 0.8]
+    expect(tv).toMatchObject({ answerMedian: 0.775, abstainMedian: 0.55, answerBelowAbstainP90: 0 });
     expect(run.metrics.signal.distributions.handoff).toMatchObject({ n: 1, median: 0.95 });
     expect(run.metrics.signal.distributions.decline).toMatchObject({ n: 1, median: 0.2 });
     expect(run.perQuestion[2]).toMatchObject({ first_hit_rank_section: null, max_cosine: 0.6 });
