@@ -130,7 +130,10 @@ export interface CodeMetrics {
   readonly downgradedNoValidCitations: number;
   readonly invalidOutput: number;
   readonly floorHits: Record<ExpectedBehavior, number>;
-  readonly latencyMs: { readonly all: LatencySummary; readonly modelCalls: LatencySummary };
+  /** all: every question; modelCalls: questions that called the model; firstAttempt: model calls without retries. */
+  readonly latencyMs: { readonly all: LatencySummary; readonly modelCalls: LatencySummary; readonly firstAttempt: LatencySummary };
+  /** Questions whose generation needed more than one HTTP attempt (429/5xx retries). */
+  readonly retriedAnswers: number;
   readonly queueWaitMs: number;
   readonly tokens: { readonly modelCalls: number; readonly meanPrompt: number; readonly meanOutput: number; readonly meanThoughts: number };
   readonly generationRequests: number;
@@ -182,7 +185,12 @@ export function computeCodeMetrics(records: readonly AnswerRecord[]): CodeMetric
     downgradedNoValidCitations: records.filter((r) => r.error === 'no_valid_citations').length,
     invalidOutput: records.filter((r) => r.error?.startsWith('invalid_output') ?? false).length,
     floorHits,
-    latencyMs: { all: latencySummary(records.map((r) => r.latency.totalMs)), modelCalls: latencySummary(called.map((r) => r.latency.totalMs)) },
+    latencyMs: {
+      all: latencySummary(records.map((r) => r.latency.totalMs)),
+      modelCalls: latencySummary(called.map((r) => r.latency.totalMs)),
+      firstAttempt: latencySummary(called.filter((r) => r.usage.generationRequests === 1).map((r) => r.latency.totalMs)),
+    },
+    retriedAnswers: called.filter((r) => r.usage.generationRequests > 1).length,
     queueWaitMs: records.reduce((sum, r) => sum + r.latency.queueWaitMs, 0),
     tokens: {
       modelCalls: called.length,
@@ -494,7 +502,7 @@ export function codeMetricsMarkdown(m: CodeMetrics): string {
     `- Quotes verified: ${ci(m.quotes.verified)}; invalid by reason: ${JSON.stringify(m.quotes.invalidByReason)}.`,
     `- Removed sentences: failed citation ${m.removedSentences.failedCitation}, unmarked claim ${m.removedSentences.unmarkedClaim}; downgraded to insufficient (no valid citation): ${m.downgradedNoValidCitations}; invalid output: ${m.invalidOutput}.`,
     `- Floor hits by expected behavior: ${JSON.stringify(m.floorHits)}.`,
-    `- Latency (excl. queue wait) all: p50 ${(m.latencyMs.all.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.all.p95 / 1000).toFixed(2)} s, max ${(m.latencyMs.all.max / 1000).toFixed(2)} s; model calls only: p50 ${(m.latencyMs.modelCalls.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.modelCalls.p95 / 1000).toFixed(2)} s. Queue wait total ${(m.queueWaitMs / 1000).toFixed(1)} s.`,
+    `- Latency (excl. queue wait) all: p50 ${(m.latencyMs.all.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.all.p95 / 1000).toFixed(2)} s, max ${(m.latencyMs.all.max / 1000).toFixed(2)} s; model calls only: p50 ${(m.latencyMs.modelCalls.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.modelCalls.p95 / 1000).toFixed(2)} s; model calls without retries (n=${m.latencyMs.firstAttempt.n}): p95 ${(m.latencyMs.firstAttempt.p95 / 1000).toFixed(2)} s. Answers that needed retries: ${m.retriedAnswers}. Queue wait total ${(m.queueWaitMs / 1000).toFixed(1)} s.`,
     `- Tokens per model call (mean): prompt ${m.tokens.meanPrompt.toFixed(0)}, output ${m.tokens.meanOutput.toFixed(0)}, thoughts ${m.tokens.meanThoughts.toFixed(0)}.`,
     `- Equivalent cost at list price: ${m.costUsd.meanPerConversation === null ? 'n/a' : `$${m.costUsd.meanPerConversation.toFixed(6)} per conversation, $${(m.costUsd.total ?? 0).toFixed(4)} total`} (free tier: $0).`,
   ];

@@ -20,7 +20,7 @@ import { cacheStoreFor, CHUNKS_FILE, DEV_FILE, errorMessage, loadConfig, REPO_RO
 import { assertSetAllowed } from '../retrieval.ts';
 import { parseJsonl, toJsonl, type EvalQuestion } from '../schema.ts';
 
-const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--dry-run] [--batch-size 10] | --set dev --external answers.csv [--label name]';
+const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--dry-run] [--batch-size 10] [--max-requests N] | --set dev --external answers.csv [--label name]';
 
 async function freeBase(base: string): Promise<string> {
   let candidate = base;
@@ -98,6 +98,7 @@ async function main(): Promise<void> {
       external: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
       'batch-size': { type: 'string', default: '10' },
+      'max-requests': { type: 'string' },
       help: { type: 'boolean' },
     },
     strict: true,
@@ -151,16 +152,27 @@ async function main(): Promise<void> {
       console.log('Dry run: no API calls made.');
       return;
     }
+    const maxRequests = values['max-requests'] === undefined ? Math.min(g.remaining, generationNeeded + 20) : Number(values['max-requests']);
+    if (!Number.isInteger(maxRequests) || maxRequests < 1) throw new Error('--max-requests must be a positive integer.');
+    console.log(`Generation request cap for this run (incl. retries): ${maxRequests}`);
     if (generationNeeded > g.remaining) throw new Error(`Not enough generation quota: need ${generationNeeded}, ${g.remaining} remain today.`);
     if (plan.misses.length > e.remaining) throw new Error(`Not enough embedding quota: need ${plan.misses.length}, ${e.remaining} remain today.`);
 
     const records: AnswerRecord[] = [];
     let failure: unknown;
+    let spent = 0;
     for (const [i, q] of questions.entries()) {
+      // Worst case for one question is 1 + maxRetries attempts; stop before the cap could be crossed.
+      if (spent + 1 + config.embedding.maxRetries > maxRequests) {
+        failure = new Error(`Stopped before ${q.id}: ${spent} generation requests used, cap ${maxRequests} (retries on 429/5xx). Partial run saved.`);
+        console.error(errorMessage(failure));
+        break;
+      }
       try {
         const result = await answerQuestion(deps, q.question);
         const record = toAnswerRecord(q, result);
         records.push(record);
+        spent += record.usage.generationRequests;
         console.log(
           `[${String(i + 1).padStart(2)}/${questions.length}] ${q.id} ${q.expected_behavior.padEnd(7)} -> ${record.status.padEnd(12)}` +
             `${record.floor_hit ? ' (floor)' : ''} ${(record.latency.totalMs / 1000).toFixed(2)} s${record.error ? ` [${record.error}]` : ''}`,

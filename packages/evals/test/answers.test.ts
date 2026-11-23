@@ -135,6 +135,13 @@ describe('computeCodeMetrics', () => {
   it('summarizes latency, tokens, requests and cost', () => {
     expect(m.latencyMs.all.n).toBe(4);
     expect(m.latencyMs.modelCalls.n).toBe(3);
+    expect(m.latencyMs.firstAttempt.n).toBe(3);
+    expect(m.retriedAnswers).toBe(0);
+    const retried = computeCodeMetrics([
+      record('r1', 'answer', 'answered', { usage: { generationRequests: 3, promptTokens: 1, outputTokens: 1, thoughtsTokens: 0, embeddingTokens: 1 } }),
+    ]);
+    expect(retried.retriedAnswers).toBe(1);
+    expect(retried.latencyMs.firstAttempt.n).toBe(0);
     expect(m.latencyMs.all.max).toBe(9100);
     expect(m.queueWaitMs).toBe(4000);
     expect(m.tokens).toMatchObject({ modelCalls: 3, meanPrompt: 2000 });
