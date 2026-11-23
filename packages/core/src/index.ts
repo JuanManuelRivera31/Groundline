@@ -15,3 +15,5 @@ export * from './embeddings/gemini.ts';
 export * from './embeddings/fake.ts';
 export * from './embeddings/embed.ts';
 export * from './ratelimit/limiter.ts';
+export * from './random.ts';
+export * from './retrieval/rrf.ts';

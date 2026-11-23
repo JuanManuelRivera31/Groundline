@@ -36,17 +36,8 @@ export function chunkQualityStats(corpus: Corpus, topN = 5): ChunkQualityStats {
   };
 }
 
-/** Deterministic PRNG (mulberry32) so samples are reproducible with --seed. */
-export function mulberry32(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+/** Deterministic PRNG so samples are reproducible with --seed (shared with evals). */
+export { mulberry32 } from '@groundline/core';
 
 export function sampleChunks(corpus: Corpus, count: number, random: () => number): CorpusChunk[] {
   const all = corpus.documents.flatMap((doc) => doc.chunks);
