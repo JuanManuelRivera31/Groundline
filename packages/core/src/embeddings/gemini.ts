@@ -1,19 +1,17 @@
 import type { EmbeddingRequestShape } from '../config.ts';
+import {
+  describeErrorResponse,
+  GEMINI_API_BASE_URL,
+  observedHeaders as readObservedHeaders,
+  redactKey,
+  safeJson,
+  type FetchLike,
+  type FetchResponseLike,
+} from '../gemini/http.ts';
 import { l2Normalize } from './normalize.ts';
 import { EmbeddingApiError, type EmbedCallResult, type EmbeddingClient, type EmbeddingTaskType } from './types.ts';
 
-/** Minimal fetch surface shared by Node, Workers and test fakes. */
-export interface FetchResponseLike {
-  readonly status: number;
-  readonly ok: boolean;
-  readonly headers: { get(name: string): string | null; forEach(callback: (value: string, key: string) => void): void };
-  text(): Promise<string>;
-}
-
-export type FetchLike = (
-  url: string,
-  init: { method: 'POST'; headers: Record<string, string>; body: string },
-) => Promise<FetchResponseLike>;
+export { GEMINI_API_BASE_URL, type FetchLike, type FetchResponseLike } from '../gemini/http.ts';
 
 export interface GeminiEmbeddingClientOptions {
   readonly apiKey: string;
@@ -30,38 +28,8 @@ export interface GeminiEmbeddingClientOptions {
   readonly baseUrl?: string | undefined;
 }
 
-export const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
-
-const OBSERVED_HEADER = /rate|retry|quota/i;
-const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
-
-interface GeminiErrorBody {
-  error?: {
-    code?: number;
-    status?: string;
-    message?: string;
-    details?: { '@type'?: string; retryDelay?: string }[];
-  };
-}
-
 interface BatchEmbedResponse {
   embeddings?: { values?: number[] }[];
-}
-
-function parseDurationMs(value: string | undefined | null): number | undefined {
-  if (!value) return undefined;
-  const protoDuration = /^(\d+(?:\.\d+)?)s$/.exec(value.trim());
-  if (protoDuration?.[1]) return Math.ceil(Number(protoDuration[1]) * 1000);
-  const seconds = /^\d+$/.exec(value.trim());
-  return seconds ? Number(value.trim()) * 1000 : undefined;
-}
-
-function safeJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
 }
 
 /**
@@ -124,10 +92,7 @@ export class GeminiEmbeddingClient implements EmbeddingClient {
       });
     }
 
-    const observedHeaders: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      if (OBSERVED_HEADER.test(key)) observedHeaders[key.toLowerCase()] = value;
-    });
+    const observedHeaders = readObservedHeaders(response);
 
     const raw = await response.text();
     if (!response.ok) throw this.#toError(response, raw);
@@ -157,25 +122,18 @@ export class GeminiEmbeddingClient implements EmbeddingClient {
   }
 
   #toError(response: FetchResponseLike, raw: string): EmbeddingApiError {
-    const body = safeJson(raw) as GeminiErrorBody | undefined;
-    const retryInfo = body?.error?.details?.find((d) => d['@type']?.endsWith('google.rpc.RetryInfo'));
-    const retryAfterMs = parseDurationMs(retryInfo?.retryDelay) ?? parseDurationMs(response.headers.get('retry-after'));
-    const detail = body?.error?.message ?? raw.slice(0, 300);
-    let message = `Gemini embeddings request failed: HTTP ${response.status}${body?.error?.status ? ` ${body.error.status}` : ''}: ${detail.slice(0, 500)}`;
+    const { detail, statusText, retryable, retryAfterMs } = describeErrorResponse(response, raw);
+    let message = `Gemini embeddings request failed: HTTP ${response.status}${statusText}: ${detail}`;
     if (response.status === 400 && /unknown name|cannot find field|invalid json payload/i.test(detail)) {
       const other: EmbeddingRequestShape = this.#shape === 'top-level' ? 'config' : 'top-level';
       message +=
         ` — the API rejected a request field while using GEMINI_EMBED_REQUEST_SHAPE=${this.#shape}. ` +
         `Set GEMINI_EMBED_REQUEST_SHAPE=${other} in .env and retry.`;
     }
-    return new EmbeddingApiError(this.#redact(message), {
-      status: response.status,
-      retryable: RETRYABLE_STATUS.has(response.status),
-      retryAfterMs,
-    });
+    return new EmbeddingApiError(this.#redact(message), { status: response.status, retryable, retryAfterMs });
   }
 
   #redact(message: string): string {
-    return message.split(this.#apiKey).join('[REDACTED]');
+    return redactKey(message, this.#apiKey);
   }
 }

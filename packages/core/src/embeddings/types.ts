@@ -1,3 +1,5 @@
+import { GeminiApiError } from '../gemini/http.ts';
+
 /**
  * Gemini task types used for retrieval: documents are embedded with
  * RETRIEVAL_DOCUMENT and user questions with RETRIEVAL_QUERY
@@ -20,18 +22,7 @@ export interface EmbeddingClient {
   embedBatch(texts: readonly string[], taskType: EmbeddingTaskType): Promise<EmbedCallResult>;
 }
 
-export class EmbeddingApiError extends Error {
-  override readonly name = 'EmbeddingApiError';
-  /** HTTP status, or 0 for network failures. */
-  readonly status: number;
-  readonly retryable: boolean;
-  /** Server-suggested delay (RetryInfo.retryDelay or Retry-After), if any. */
-  readonly retryAfterMs: number | undefined;
-
-  constructor(message: string, options: { status: number; retryable: boolean; retryAfterMs?: number | undefined; cause?: unknown }) {
-    super(message, options.cause === undefined ? undefined : { cause: options.cause });
-    this.status = options.status;
-    this.retryable = options.retryable;
-    this.retryAfterMs = options.retryAfterMs;
-  }
+/** Error from the embeddings endpoint; see GeminiApiError for the retry fields. */
+export class EmbeddingApiError extends GeminiApiError {
+  override readonly name: string = 'EmbeddingApiError';
 }

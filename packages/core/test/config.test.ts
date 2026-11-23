@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ConfigError, parseConfig } from '../src/config.ts';
+import { ConfigError, generationLimitDefaults, parseConfig } from '../src/config.ts';
 import { l2Normalize } from '../src/embeddings/normalize.ts';
 import { backoffDelayMs } from '../src/embeddings/retry.ts';
 
@@ -23,6 +23,32 @@ describe('parseConfig', () => {
     expect(config.embedding.model).toBe('gemini-embedding-2');
     expect(config.embedding.dimensions).toBe(1536);
     expect(config.databaseUrl).toContain(':6000/');
+  });
+
+  it('defaults generation and answer settings and flags missing generation limits', () => {
+    const config = parseConfig({});
+    expect(config.generation).toEqual({
+      model: 'gemini-3.5-flash-lite',
+      temperature: 0,
+      maxOutputTokens: 1024,
+      thinkingLevel: 'MINIMAL',
+      schemaField: 'responseJsonSchema',
+      limits: { rpm: 10, tpm: 100_000, rpd: 200 },
+    });
+    expect(config.answer).toEqual({ candidates: 20, sources: 6, floor: 0.6, retrievalMode: 'vector' });
+    expect(generationLimitDefaults(config)).toEqual(['GEN_RPM', 'GEN_TPM', 'GEN_RPD']);
+    expect(generationLimitDefaults(parseConfig({ GEN_RPM: '5', GEN_TPM: '1000', GEN_RPD: '50' }))).toEqual([]);
+  });
+
+  it('validates generation and answer settings', () => {
+    expect(parseConfig({ GEN_TEMPERATURE: '0.2', GEN_THINKING_LEVEL: 'off', ANSWER_FLOOR: '0.55' }).generation.thinkingLevel).toBeUndefined();
+    expect(() => parseConfig({ GEN_TEMPERATURE: '0.5' })).toThrow(ConfigError);
+    expect(() => parseConfig({ GEN_TEMPERATURE: '-1' })).toThrow(ConfigError);
+    expect(() => parseConfig({ GEN_THINKING_LEVEL: 'max' })).toThrow(ConfigError);
+    expect(() => parseConfig({ GEN_SCHEMA_FIELD: 'schema' })).toThrow(ConfigError);
+    expect(() => parseConfig({ RETRIEVAL_MODE: 'fts' })).toThrow(ConfigError);
+    expect(() => parseConfig({ ANSWER_SOURCES: '30', RETRIEVAL_CANDIDATES: '20' })).toThrow(ConfigError);
+    expect(() => parseConfig({ ANSWER_FLOOR: '1.5' })).toThrow(ConfigError);
   });
 
   it('prefers an explicit DATABASE_URL', () => {
