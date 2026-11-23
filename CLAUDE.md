@@ -31,6 +31,11 @@ Groundline is a reusable AI support-agent kit. It answers customer questions **o
 | `pnpm corpus:export --source plausible` | Write `data/eval-work/chunks.jsonl` (stable chunk ids; no network, no DB) |
 | `pnpm eval:build-sets` | Build and freeze `evals/plausible/{dev,test}.jsonl` from verified candidates (write-once) |
 | `pnpm eval:retrieval --set dev --mode vector\|fts\|hybrid\|all` | Retrieval metrics on dev (refuses `--set test`); writes `evals/runs/` |
+| `pnpm ask "<question>"` | One grounded answer: status, cited answer, sources, max similarity vs floor, latency, tokens, equivalent cost |
+| `pnpm eval:calibrate-floor --set dev` | FLOOR from the latest dev vector run + sensitivity table (no API, no DB) |
+| `pnpm eval:answers --set dev [--label x] [--dry-run]` | Answer run on dev (refuses `--set test`); writes the run, code metrics and judge batches to `evals/runs/` |
+| `pnpm eval:answers --set dev --external answers.csv` | Audit another bot's answers (`id,answer`) with the same judge; no API calls |
+| `pnpm eval:aggregate <run.json>` | Validate judgments and merge code + judge metrics against the targets |
 
 Node 26 runs the TypeScript sources directly (type stripping), so there is no compile step for the CLIs.
 
@@ -38,13 +43,17 @@ Node 26 runs the TypeScript sources directly (type stripping), so there is no co
 
 ```
 packages/core     Runtime-agnostic logic (Node + Workers): markdown/MDX cleaning, chunking,
-                  Docusaurus URL mapping, Gemini client, cache keys, rate limiter, config.
+                  Docusaurus URL mapping, Gemini embedding + generation clients, cache keys,
+                  rate limiter, config, answer engine (prompts, schema, citation validation), list prices.
                   No node:* imports, no process/Buffer (lint-enforced).
 packages/db       SQL migrations, Db interface, Node adapter (pg). Workers adapter: deployment session.
-packages/evals    Eval schema, set builder, retrieval metrics (Wilson, AUC + bootstrap), runners.
+packages/evals    Eval schema, set builder, retrieval and answer metrics, floor calibration, runners,
+                  Node wiring of the answer engine (also used by `pnpm ask`).
 apps/ingest       Node-only CLIs: ingest, search:debug, db:migrate, chunks:stats, corpus:export.
 evals/plausible   Frozen eval sets (CC BY-SA 4.0), MANIFEST.json, audit sample, topic map.
-evals/runs        Recorded eval runs (config, metrics, per-question results; no doc text).
+evals/judge       Judge rubric (versioned) and the external-audit CSV example.
+evals/runs        Recorded eval runs. Retrieval runs carry no doc text; answer runs include cited
+                  source excerpts (CC BY-SA 4.0) and judge batches/judgments.
 docs/adr          Architecture decision records.
 docs/reports      Session reports.
 data/             Gitignored: cloned corpora, eval work files.

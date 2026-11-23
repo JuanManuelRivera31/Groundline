@@ -21,4 +21,10 @@ reference answers and key facts adapted from the same documentation. Those
 files are licensed under CC BY-SA 4.0 with attribution to Plausible Analytics;
 see evals/plausible/LICENSE.
 
+Answer runs
+-----------
+evals/runs/*-answers* files include excerpts of the documentation (the sources
+cited by each answer) and answers derived from it. They are licensed under
+CC BY-SA 4.0 with attribution to Plausible Analytics.
+
 Unofficial demo. Not affiliated with or endorsed by Plausible Analytics.
