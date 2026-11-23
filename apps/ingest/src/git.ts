@@ -42,18 +42,17 @@ export async function ensureCheckout(repoUrl: string, dir: string, commit: strin
   const origin = await git(['remote', 'get-url', 'origin'], dir);
   if (origin !== repoUrl) throw new Error(`${dir} points to ${origin}, expected ${repoUrl}. Remove it and retry.`);
 
-  const head = await git(['rev-parse', '--verify', '--quiet', 'HEAD'], dir).catch(() => '');
-  if (head !== commit) {
-    const hasCommit = await git(['cat-file', '-e', `${commit}^{commit}`], dir).then(
-      () => true,
-      () => false,
-    );
-    if (!hasCommit) {
-      await git(['fetch', '--filter=blob:none', 'origin', commit], dir);
-      fetched = true;
-    }
-    await git(['checkout', '--detach', commit], dir);
+  const hasCommit = await git(['cat-file', '-e', `${commit}^{commit}`], dir).then(
+    () => true,
+    () => false,
+  );
+  if (!hasCommit) {
+    await git(['fetch', '--filter=blob:none', 'origin', commit], dir);
+    fetched = true;
   }
+  // Always check out: after `clone --no-checkout` HEAD may already name the
+  // pinned commit while the working tree is still empty. A no-op otherwise.
+  await git(['checkout', '--detach', commit], dir);
 
   const verified = await git(['rev-parse', 'HEAD'], dir);
   if (verified !== commit) throw new Error(`Checkout verification failed: HEAD is ${verified}, expected ${commit}.`);
