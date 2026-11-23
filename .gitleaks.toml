@@ -1,8 +1,14 @@
-# Extends the default gitleaks rules. Only the dummy key used by the fake
-# Gemini client tests is allowlisted; it is not a real credential.
+# Extends the default gitleaks rules. Allowlisted: the dummy key used by the
+# fake Gemini client tests, and the names of the answer-evaluation targets
+# (`key: 'citationsCorrect'` etc.), which generic-api-key mistakes for keys.
+# None of these is a credential.
 [extend]
 useDefault = true
 
 [allowlist]
 description = "Known non-secrets"
-regexes = ['''test-key-not-a-real-secret''']
+regexTarget = "match"
+regexes = [
+  '''test-key-not-a-real-secret''',
+  '''key["']?\s*:\s*["'](fabricated|idkCorrect|correctAnswers|citationsCorrect|latencyP95Ms)["']''',
+]
