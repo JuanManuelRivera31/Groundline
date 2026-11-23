@@ -9,12 +9,15 @@ export interface ChunkOptions {
   readonly overlapTokens: number;
   /** A trailing piece smaller than this is merged into the previous chunk when it fits. */
   readonly minTailTokens: number;
+  /** Fold small descendant sections into their parent section (default true). */
+  readonly mergeSubtrees: boolean;
 }
 
 export const DEFAULT_CHUNK_OPTIONS: ChunkOptions = {
   maxTokens: 500,
   overlapTokens: 60,
   minTailTokens: 120,
+  mergeSubtrees: true,
 };
 
 export const HEADING_SEPARATOR = ' > ';
@@ -53,6 +56,8 @@ interface Section {
   readonly depth: number;
   readonly heading: string | undefined;
   readonly blocks: Block[];
+  /** Heading lines of empty sibling sections that precede this one. */
+  readonly lead: readonly Block[];
 }
 
 interface Piece {
@@ -68,7 +73,7 @@ function buildSections(blocks: readonly Block[], title: string): Section[] {
   const slugger = new GithubSlugger();
   const sections: Section[] = [];
   let stack: { depth: number; text: string }[] = [];
-  let current: Section = { trail: [title], anchor: null, depth: 0, heading: undefined, blocks: [] };
+  let current: Section = { trail: [title], anchor: null, depth: 0, heading: undefined, blocks: [], lead: [] };
 
   for (const block of blocks) {
     if (block.kind !== 'heading') {
@@ -80,7 +85,7 @@ function buildSections(blocks: readonly Block[], title: string): Section[] {
     if (block.depth === 1 && normalize(block.text) === normalize(title)) {
       // The H1 repeats the document title: it is the document top, not a section.
       stack = [];
-      current = { trail: [title], anchor: null, depth: 1, heading: undefined, blocks: [] };
+      current = { trail: [title], anchor: null, depth: 1, heading: undefined, blocks: [], lead: [] };
       continue;
     }
     stack = stack.filter((entry) => entry.depth < block.depth);
@@ -91,6 +96,7 @@ function buildSections(blocks: readonly Block[], title: string): Section[] {
       depth: block.depth,
       heading: block.text,
       blocks: [],
+      lead: [],
     };
   }
   sections.push(current);
@@ -116,10 +122,43 @@ function mergeEmptySections(sections: readonly Section[]): Section[] {
     const carried: Block[] = pending
       .filter((empty) => empty.heading !== undefined && !isPrefix(empty.trail, section.trail))
       .map((empty) => ({ kind: 'text', text: `${'#'.repeat(Math.max(empty.depth, 2))} ${empty.heading ?? ''}` }));
-    result.push({ ...section, blocks: [...carried, ...section.blocks] });
+    result.push({ ...section, lead: carried });
     pending = [];
   }
   return result;
+}
+
+const headingLine = (section: Section): Block => ({
+  kind: 'text',
+  text: `${'#'.repeat(Math.max(section.depth, 2))} ${section.heading ?? ''}`,
+});
+
+/**
+ * Small sections are folded into their parent: a section absorbs the
+ * descendant sections that follow it while the whole stays within the token
+ * budget. The chunk keeps the parent's heading path and anchor, which on the
+ * rendered page encloses every absorbed subsection, so citations stay exact.
+ */
+function mergeSmallSubtrees(sections: readonly Section[], maxTokens: number): Section[] {
+  const out: Section[] = [];
+  let i = 0;
+  while (i < sections.length) {
+    const root = sections[i];
+    if (!root) break;
+    const pathTokens = estimateTokens(`${root.trail.join(HEADING_SEPARATOR)}\n\n`);
+    let blocks: Block[] = [...root.lead, ...root.blocks];
+    let j = i + 1;
+    for (; j < sections.length; j++) {
+      const next = sections[j];
+      if (next?.heading === undefined || next.trail.length <= root.trail.length || !isPrefix(root.trail, next.trail)) break;
+      const merged = [...blocks, ...next.lead, headingLine(next), ...next.blocks];
+      if (pathTokens + estimateTokens(merged.map((b) => b.text).join('\n\n')) > maxTokens) break;
+      blocks = merged;
+    }
+    out.push({ ...root, lead: [], blocks });
+    i = j;
+  }
+  return out;
 }
 
 const SENTENCE_BOUNDARY = /(?<=[.!?:])\s+(?=[A-Z0-9"'(*[`-])/;
@@ -208,17 +247,20 @@ function packSection(blocks: readonly Block[], budget: number, options: ChunkOpt
 }
 
 /** Splits a Markdown/MDX document body into heading-aware chunks. */
-export function chunkDocument(input: ChunkDocumentInput, options: ChunkOptions = DEFAULT_CHUNK_OPTIONS): ChunkedDocument {
+export function chunkDocument(input: ChunkDocumentInput, overrides: Partial<ChunkOptions> = {}): ChunkedDocument {
+  const options: ChunkOptions = { ...DEFAULT_CHUNK_OPTIONS, ...overrides };
   const blocks = parseBlocks(input.body);
   const firstH1 = blocks.find((b) => b.kind === 'heading' && b.depth === 1);
   const title = input.title ?? (firstH1?.kind === 'heading' ? firstH1.text : undefined) ?? input.fallbackTitle;
 
   const chunks: DraftChunk[] = [];
-  for (const section of mergeEmptySections(buildSections(blocks, title))) {
+  const nonEmpty = mergeEmptySections(buildSections(blocks, title));
+  const sections = options.mergeSubtrees ? mergeSmallSubtrees(nonEmpty, options.maxTokens) : nonEmpty;
+  for (const section of sections) {
     const headingPath = section.trail.join(HEADING_SEPARATOR);
     const prefixTokens = estimateTokens(`${headingPath}\n\n`);
     const budget = Math.max(options.maxTokens - prefixTokens, 100);
-    for (const content of packSection(section.blocks, budget, options)) {
+    for (const content of packSection([...section.lead, ...section.blocks], budget, options)) {
       const embedText = `${headingPath}\n\n${content}`;
       chunks.push({
         ord: chunks.length,

@@ -22,6 +22,8 @@ Answers must cite a precise source, so chunks need to align with document sectio
   - An H1 equal to the title is the document top: its anchor is null, so the citation URL has no fragment.
   - Anchors use `github-slugger` per document (duplicates become `-1`, `-2`), matching Docusaurus' heading ids.
   - **A section with no body is never emitted alone**; it merges into the next section. Its heading survives either in the next heading path (when it is an ancestor) or as a heading line at the start of the next chunk. A trailing empty section is dropped.
+- **Small subtrees fold into their parent.** A section absorbs the descendant sections that follow it (their heading lines are kept in the content) as long as the whole stays within the budget. The chunk keeps the parent's heading path and anchor. On the rendered page the parent's anchor encloses every absorbed subsection, so the citation stays exact. Siblings are never folded together, so each sibling keeps its own anchor.
+  - On the pinned Plausible corpus this takes 1,092 chunks (median 138 tokens) down to 789 (median 198), with no citation getting less precise.
 - **Packing**:
   - Blocks are packed greedily up to **500 estimated tokens** per chunk, heading path included, aiming for the 350–500 range on long sections.
   - Code blocks and tables are atomic and never cut; if one is bigger than the budget it becomes its own chunk.

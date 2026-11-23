@@ -6,10 +6,13 @@ const sentence = (i: number): string => `Sentence number ${i} explains one billi
 const paragraph = (from: number, count: number): string =>
   Array.from({ length: count }, (_, i) => sentence(from + i)).join(' ');
 
-describe('chunkDocument', () => {
+/** Keep every section separate to test heading logic in isolation. */
+const SEPARATE = { mergeSubtrees: false } as const;
+
+describe('chunkDocument: sections and headings', () => {
   it('builds heading paths that always start with the document title', () => {
     const body = ['# Billing FAQ', 'Intro text.', '## Refunds', 'Refund text.', '### Duplicate charge', 'Charged twice text.'].join('\n\n');
-    const { title, chunks } = chunkDocument({ body, title: 'Billing FAQ', fallbackTitle: 'billing' });
+    const { title, chunks } = chunkDocument({ body, title: 'Billing FAQ', fallbackTitle: 'billing' }, SEPARATE);
     expect(title).toBe('Billing FAQ');
     expect(chunks.map((c) => [c.headingPath, c.anchor])).toEqual([
       ['Billing FAQ', null],
@@ -26,13 +29,13 @@ describe('chunkDocument', () => {
 
   it('pops the heading stack when a shallower heading appears', () => {
     const body = '## A\n\na\n\n### A1\n\na1\n\n## B\n\nb';
-    const paths = chunkDocument({ body, title: 'Doc', fallbackTitle: 'x' }).chunks.map((c) => c.headingPath);
+    const paths = chunkDocument({ body, title: 'Doc', fallbackTitle: 'x' }, SEPARATE).chunks.map((c) => c.headingPath);
     expect(paths).toEqual(['Doc > A', 'Doc > A > A1', 'Doc > B']);
   });
 
   it('never emits a heading-only chunk: empty sections merge into the next one', () => {
     const body = '## Parent\n\n### Child\n\nChild body.\n\n## Empty sibling\n\n## Next\n\nNext body.\n\n## Trailing empty';
-    const { chunks } = chunkDocument({ body, title: 'Doc', fallbackTitle: 'x' });
+    const { chunks } = chunkDocument({ body, title: 'Doc', fallbackTitle: 'x' }, SEPARATE);
     expect(chunks.map((c) => c.headingPath)).toEqual(['Doc > Parent > Child', 'Doc > Next']);
     expect(chunks[1]?.content).toBe('## Empty sibling\n\nNext body.');
     expect(chunks.every((c) => c.content.trim() !== '')).toBe(true);
@@ -40,15 +43,53 @@ describe('chunkDocument', () => {
 
   it('generates Docusaurus-style anchors with duplicate suffixes and explicit ids', () => {
     const body = '## Setup\n\none\n\n## Setup\n\ntwo\n\n## Custom {#my-id}\n\nthree\n\n## What’s new? (2024)\n\nfour';
-    const anchors = chunkDocument({ body, title: 'Doc', fallbackTitle: 'x' }).chunks.map((c) => c.anchor);
+    const anchors = chunkDocument({ body, title: 'Doc', fallbackTitle: 'x' }, SEPARATE).chunks.map((c) => c.anchor);
     expect(anchors).toEqual(['setup', 'setup-1', 'my-id', 'whats-new-2024']);
   });
 
+  it('assigns consecutive ords across the document', () => {
+    const body = '## A\n\na\n\n## B\n\nb\n\n## C\n\nc';
+    expect(chunkDocument({ body, title: 'Doc', fallbackTitle: 'x' }, SEPARATE).chunks.map((c) => c.ord)).toEqual([0, 1, 2]);
+  });
+});
+
+describe('chunkDocument: merging small subtrees', () => {
+  it('folds small descendant sections into their parent, keeping the parent anchor', () => {
+    const body = ['## Refunds', 'Refund text.', '### Duplicate charge', 'Charged twice text.', '### Timing', 'A few days.'].join('\n\n');
+    const { chunks } = chunkDocument({ body, title: 'Billing FAQ', fallbackTitle: 'x' });
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]).toMatchObject({ headingPath: 'Billing FAQ > Refunds', anchor: 'refunds' });
+    expect(chunks[0]?.content).toBe('Refund text.\n\n### Duplicate charge\n\nCharged twice text.\n\n### Timing\n\nA few days.');
+  });
+
+  it('folds a whole short document into one chunk anchored at the page top', () => {
+    const body = '# Cancel\n\nIntro.\n\n## Steps\n\nClick cancel.\n\n## After\n\nData is kept.';
+    const { chunks } = chunkDocument({ body, title: 'Cancel', fallbackTitle: 'x' });
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]).toMatchObject({ headingPath: 'Cancel', anchor: null });
+  });
+
+  it('never folds siblings together, so every chunk keeps an exact anchor', () => {
+    const body = '## Bounce rate\n\nShort definition.\n\n## Visit duration\n\nAnother short definition.';
+    const { chunks } = chunkDocument({ body, title: 'Metrics', fallbackTitle: 'x' });
+    expect(chunks.map((c) => c.anchor)).toEqual(['bounce-rate', 'visit-duration']);
+  });
+
+  it('stops folding when the budget would be exceeded', () => {
+    const body = `## Parent\n\nShort intro.\n\n### Big child\n\n${paragraph(0, 40)}\n\n### Small child\n\nTiny.`;
+    const { chunks } = chunkDocument({ body, title: 'Doc', fallbackTitle: 'x' });
+    expect(chunks[0]).toMatchObject({ headingPath: 'Doc > Parent', content: 'Short intro.' });
+    expect(chunks.some((c) => c.headingPath === 'Doc > Parent > Big child')).toBe(true);
+    for (const chunk of chunks) expect(chunk.tokens).toBeLessThanOrEqual(500);
+  });
+});
+
+describe('chunkDocument: packing', () => {
   it('splits long sections within the token budget, with a small overlap', () => {
     const body = `## Long\n\n${Array.from({ length: 12 }, (_, i) => paragraph(i * 8, 8)).join('\n\n')}`;
     const { chunks } = chunkDocument({ body, title: 'Doc', fallbackTitle: 'x' });
     expect(chunks.length).toBeGreaterThan(1);
-    for (const chunk of chunks) expect(chunk.tokens).toBeLessThanOrEqual(500 * 1.2);
+    for (const chunk of chunks) expect(chunk.tokens).toBeLessThanOrEqual(500);
     for (let i = 1; i < chunks.length; i++) {
       const previous = chunks[i - 1]?.content ?? '';
       const firstPara = chunks[i]?.content.split('\n\n')[0] ?? '';
@@ -94,10 +135,5 @@ describe('chunkDocument', () => {
     const { chunks } = chunkDocument({ body, title: 'Ecommerce', fallbackTitle: 'x' });
     expect(chunks).toHaveLength(1);
     expect(chunks[0]?.content).toBe('Tip:\nRevenue is shown in your reporting currency.\n\nRevenue goal');
-  });
-
-  it('assigns consecutive ords across the document', () => {
-    const body = '## A\n\na\n\n## B\n\nb\n\n## C\n\nc';
-    expect(chunkDocument({ body, title: 'Doc', fallbackTitle: 'x' }).chunks.map((c) => c.ord)).toEqual([0, 1, 2]);
   });
 });

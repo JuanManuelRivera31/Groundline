@@ -52,16 +52,15 @@ describe('loadCorpus', () => {
     expect(corpus.skipped).toEqual([{ path: 'draft.md', reason: 'draft' }]);
 
     const refunds = corpus.documents.find((d) => d.path === 'refunds.md');
-    expect(refunds?.chunks.map((c) => [c.headingPath, c.url])).toEqual([
-      ['Refund policy', 'https://docs.example.test/docs/refunds'],
-      ['Refund policy > Duplicate charges', 'https://docs.example.test/docs/refunds#duplicate-charges'],
-      ['Refund policy > Request a refund', 'https://docs.example.test/docs/refunds#request-a-refund'],
-    ]);
-    const duplicate = refunds?.chunks[1]?.content ?? '';
-    expect(duplicate).toContain('Note:\nRefunds can take a few business days');
-    expect(duplicate).toContain('Refund form');
-    expect(refunds?.chunks[2]?.content).toContain('## Empty section');
-    expect(refunds?.chunks[2]?.content).toContain('```bash');
+    // A short page folds into one chunk anchored at the page top.
+    expect(refunds?.chunks.map((c) => [c.headingPath, c.url])).toEqual([['Refund policy', 'https://docs.example.test/docs/refunds']]);
+    const content = refunds?.chunks[0]?.content ?? '';
+    expect(content).toContain('## Duplicate charges');
+    expect(content).toContain('Note:\nRefunds can take a few business days');
+    expect(content).toContain('Refund form');
+    expect(content).toContain('## Empty section\n\n## Request a refund');
+    expect(content).toContain('```bash');
+    expect(content).not.toMatch(/import|useBaseUrl/);
   });
 });
 
@@ -72,18 +71,18 @@ describe('runIngest', () => {
     const client = new FakeEmbeddingClient({ dimensions: 8, maxBatchSize: 20 });
 
     const first = await runIngest(deps(db, client), source, corpus, source.commit, { dryRun: false });
-    expect(first.estimate).toMatchObject({ documents: 2, chunks: 4, cacheHits: 0, textsToEmbed: 4 });
-    expect(first.embed).toMatchObject({ httpCalls: 1, quotaRequests: 4 });
-    expect(first.sync).toMatchObject({ documentsInserted: 2, chunksInserted: 4 });
-    expect(db.usage.map((u) => [u.kind, u.requests, u.ingestRunId])).toEqual([['embed_document', 4, first.runId]]);
+    expect(first.estimate).toMatchObject({ documents: 2, chunks: 2, cacheHits: 0, textsToEmbed: 2 });
+    expect(first.embed).toMatchObject({ httpCalls: 1, quotaRequests: 2 });
+    expect(first.sync).toMatchObject({ documentsInserted: 2, chunksInserted: 2 });
+    expect(db.usage.map((u) => [u.kind, u.requests, u.ingestRunId])).toEqual([['embed_document', 2, first.runId]]);
 
     const second = await runIngest(deps(db, undefined), source, corpus, source.commit, { dryRun: false });
     expect(client.calls).toHaveLength(1);
     expect(second.embed).toBeNull();
-    expect(second.estimate).toMatchObject({ cacheHits: 4, textsToEmbed: 0, quotaRequests: 0 });
-    expect(second.sync).toMatchObject({ chunksInserted: 0, chunksUpdated: 0, chunksUnchanged: 4, chunksDeleted: 0 });
+    expect(second.estimate).toMatchObject({ cacheHits: 2, textsToEmbed: 0, quotaRequests: 0 });
+    expect(second.sync).toMatchObject({ chunksInserted: 0, chunksUpdated: 0, chunksUnchanged: 2, chunksDeleted: 0 });
     const run = db.runs.get(second.runId ?? -1);
-    expect(run).toMatchObject({ status: 'succeeded', apiCalls: 0, apiRequests: 0, cacheHits: 4, embeddingModel: 'fake-embedding', embeddingDims: 8 });
+    expect(run).toMatchObject({ status: 'succeeded', apiCalls: 0, apiRequests: 0, cacheHits: 2, embeddingModel: 'fake-embedding', embeddingDims: 8 });
   });
 
   it('deletes documents that disappeared from the source and re-embeds only changed text', async () => {
@@ -99,7 +98,7 @@ describe('runIngest', () => {
     const result = await runIngest(deps(db, client), source, await loadCorpus(source, dir), source.commit, { dryRun: false });
 
     expect(result.embed?.quotaRequests).toBe(1);
-    expect(result.sync).toMatchObject({ documentsInserted: 1, documentsDeleted: 1, chunksDeleted: 1, chunksUnchanged: 3 });
+    expect(result.sync).toMatchObject({ documentsInserted: 1, documentsDeleted: 1, chunksDeleted: 1, chunksUnchanged: 1 });
     expect([...db.documents.keys()].sort()).toEqual(['new.md', 'refunds.md']);
   });
 
@@ -107,7 +106,7 @@ describe('runIngest', () => {
     const db = new MemoryDb();
     const result = await runIngest(deps(db, undefined), source, await loadCorpus(source, FIXTURE_REPO), source.commit, { dryRun: true });
     expect(result.dryRun).toBe(true);
-    expect(result.estimate).toMatchObject({ textsToEmbed: 4, quotaRequests: 4, httpCalls: 1, remainingToday: 800 });
+    expect(result.estimate).toMatchObject({ textsToEmbed: 2, quotaRequests: 2, httpCalls: 1, remainingToday: 800 });
     expect(db.documents.size).toBe(0);
     expect(db.usage).toHaveLength(0);
   });
@@ -115,7 +114,7 @@ describe('runIngest', () => {
   it('stops before calling the API when the daily quota cannot cover the run', async () => {
     const db = new MemoryDb();
     const client = new FakeEmbeddingClient({ dimensions: 8 });
-    const run = runIngest(deps(db, client, { GEMINI_EMBED_RPD: '3' }), source, await loadCorpus(source, FIXTURE_REPO), source.commit, { dryRun: false });
+    const run = runIngest(deps(db, client, { GEMINI_EMBED_RPD: '1' }), source, await loadCorpus(source, FIXTURE_REPO), source.commit, { dryRun: false });
     await expect(run).rejects.toBeInstanceOf(QuotaExceededError);
     expect(client.calls).toHaveLength(0);
   });
@@ -133,10 +132,13 @@ describe('chunk quality stats', () => {
   it('summarizes token distribution and samples deterministically', async () => {
     const corpus = await loadCorpus(source, FIXTURE_REPO);
     const stats = chunkQualityStats(corpus);
-    expect(stats).toMatchObject({ documents: 2, chunks: 4 });
+    expect(stats).toMatchObject({ documents: 2, chunks: 2 });
     expect(stats.tokens.min).toBeLessThanOrEqual(stats.tokens.median);
     expect(stats.tokens.p95).toBeLessThanOrEqual(stats.tokens.max);
-    expect(stats.topDocuments[0]).toEqual({ path: 'refunds.md', chunks: 3 });
+    expect(stats.topDocuments).toEqual([
+      { path: 'guides/setup.md', chunks: 1 },
+      { path: 'refunds.md', chunks: 1 },
+    ]);
     const a = sampleChunks(corpus, 2, mulberry32(7)).map((c) => c.url);
     const b = sampleChunks(corpus, 2, mulberry32(7)).map((c) => c.url);
     expect(a).toEqual(b);
