@@ -22,7 +22,8 @@
     "chunks:stats": "node apps/ingest/src/cli/chunks-stats.ts",
     "corpus:export": "node apps/ingest/src/cli/corpus-export.ts",
     "eval:build-sets": "node packages/evals/src/cli/build-sets.ts",
-    "eval:retrieval": "node packages/evals/src/cli/eval-retrieval.ts"
+    "eval:retrieval": "node packages/evals/src/cli/eval-retrieval.ts",
+    "eval:extend-dev": "node packages/evals/src/cli/extend-dev.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

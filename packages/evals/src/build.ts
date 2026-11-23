@@ -1,5 +1,13 @@
 import { mulberry32, shuffled } from '@groundline/core';
-import { ALL_CATEGORIES, toQuestion, type Category, type ChunkIndex, type EvalQuestion, type QuestionDraft } from './schema.ts';
+import {
+  ALL_CATEGORIES,
+  toQuestion,
+  type Category,
+  type ChunkIndex,
+  type EvalQuestion,
+  type ExpectedBehavior,
+  type QuestionDraft,
+} from './schema.ts';
 
 export type SetName = 'dev' | 'test';
 
@@ -200,4 +208,95 @@ export function maxCrossSimilarity(dev: readonly EvalQuestion[], test: readonly 
     for (const t of testTokens) max = Math.max(max, jaccard(dt, t));
   }
   return max;
+}
+
+export interface ExtensionOptions {
+  /** Maximum number of questions to add. */
+  readonly maxNew: number;
+  /** Behaviors eligible for extension, in priority order. */
+  readonly behaviors: readonly ExpectedBehavior[];
+  /** Max share of the extended set from one document (0.05 = 5%). */
+  readonly maxDocShare: number;
+  readonly nearThreshold: number;
+  readonly duplicateThreshold: number;
+  readonly seed: number;
+}
+
+export interface ExtensionResult {
+  readonly added: EvalQuestion[];
+  /** Counts only: reasons leftovers were rejected (never their content). */
+  readonly rejected: Readonly<Record<'testChunkOverlap' | 'testSimilarity' | 'devDuplicate' | 'docCap' | 'notEligible' | 'overLimit', number>>;
+}
+
+/**
+ * Extends a dev set with verified leftovers without touching test:
+ * - only the given behaviors, in priority order, at most `maxNew`;
+ * - no leftover that shares a source chunk with any test question;
+ * - token Jaccard against every test question below `nearThreshold`;
+ * - not a near-duplicate of a dev question;
+ * - per-document cap recomputed on the extended size.
+ * New ids continue the dev numbering.
+ */
+export function extendDev(
+  dev: readonly EvalQuestion[],
+  test: readonly EvalQuestion[],
+  leftovers: readonly Candidate[],
+  index: ChunkIndex,
+  options: ExtensionOptions,
+): ExtensionResult {
+  const rejected = { testChunkOverlap: 0, testSimilarity: 0, devDuplicate: 0, docCap: 0, notEligible: 0, overLimit: 0 };
+  const testChunks = new Set(test.flatMap((q) => q.source_chunk_ids));
+  const testTokens = test.map((q) => questionTokens(q.question));
+  const devTokens = dev.map((q) => questionTokens(q.question));
+
+  const random = mulberry32(options.seed);
+  const ordered = shuffled([...leftovers].sort((a, b) => a.candidateId.localeCompare(b.candidateId)), random).sort(
+    (a, b) => rank(a.expected_behavior) - rank(b.expected_behavior),
+  );
+  function rank(b: ExpectedBehavior): number {
+    const i = options.behaviors.indexOf(b);
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+  }
+
+  const eligible: Candidate[] = [];
+  for (const c of ordered) {
+    if (!options.behaviors.includes(c.expected_behavior)) {
+      rejected.notEligible++;
+      continue;
+    }
+    if (c.source_chunk_ids.some((id) => testChunks.has(id))) {
+      rejected.testChunkOverlap++;
+      continue;
+    }
+    const tokens = questionTokens(c.question);
+    if (testTokens.some((t) => jaccard(t, tokens) >= options.nearThreshold)) {
+      rejected.testSimilarity++;
+      continue;
+    }
+    if ([...devTokens, ...eligible.map((e) => questionTokens(e.question))].some((t) => jaccard(t, tokens) >= options.duplicateThreshold)) {
+      rejected.devDuplicate++;
+      continue;
+    }
+    eligible.push(c);
+  }
+
+  const chosen = eligible.slice(0, options.maxNew);
+  rejected.overLimit = eligible.length - chosen.length;
+  // Per-document cap on the extended set; drop offenders (latest first) until it holds.
+  const docsOf = (q: { readonly source_chunk_ids: readonly string[] }): string[] => [
+    ...new Set(q.source_chunk_ids.map((id) => index.byId.get(id)?.doc_path).filter((d): d is string => !!d)),
+  ];
+  for (;;) {
+    const total = dev.length + chosen.length;
+    const cap = Math.floor(total * options.maxDocShare);
+    const counts = new Map<string, number>();
+    for (const q of [...dev, ...chosen]) for (const d of docsOf(q)) counts.set(d, (counts.get(d) ?? 0) + 1);
+    const over = [...chosen].reverse().find((c) => docsOf(c).some((d) => (counts.get(d) ?? 0) > cap));
+    if (!over) break;
+    chosen.splice(chosen.indexOf(over), 1);
+    rejected.docCap++;
+  }
+
+  const start = dev.length + 1;
+  return { added: chosen.map((c, i) => toQuestion(`dev-${String(start + i).padStart(3, '0')}`, c)), rejected };
 }

@@ -57,29 +57,73 @@
   "sets": {
     "dev": {
       "file": "dev.jsonl",
-      "sha256": "38b27d02a5007dc5a530afba7e5a95e0304dc9ca88a6af880e8bb85342ab7909",
-      "total": 60,
+      "sha256": "885fe157227482560cd9756928ab6e88fc514b2f864e2cd0ff6995881b9e1c0b",
+      "total": 71,
       "by_behavior": {
         "answer": 45,
-        "abstain": 8,
-        "handoff": 3,
-        "decline": 4
+        "abstain": 14,
+        "handoff": 4,
+        "decline": 8
       },
       "by_category": {
         "billing_account": 16,
         "install_integrations": 14,
         "dashboard_metrics": 11,
         "api": 4,
-        "not_covered": 6,
-        "off_topic": 2,
-        "competitor": 2,
-        "account_action": 3,
-        "prompt_injection": 2
+        "not_covered": 9,
+        "off_topic": 5,
+        "competitor": 4,
+        "account_action": 4,
+        "prompt_injection": 4
       },
       "max_doc_share": {
         "doc": "trial.md",
         "count": 3,
-        "share": 0.05
+        "share": 0.04225352112676056
+      },
+      "version": 2,
+      "note": "dev v2: extended with verified leftovers before any run",
+      "v1_sha256": "38b27d02a5007dc5a530afba7e5a95e0304dc9ca88a6af880e8bb85342ab7909",
+      "extension": {
+        "leftovers_available_by_behavior": {
+          "answer": 46,
+          "abstain": 6,
+          "handoff": 1,
+          "decline": 4
+        },
+        "added": 11,
+        "added_ids": [
+          "dev-061",
+          "dev-062",
+          "dev-063",
+          "dev-064",
+          "dev-065",
+          "dev-066",
+          "dev-067",
+          "dev-068",
+          "dev-069",
+          "dev-070",
+          "dev-071"
+        ],
+        "rejected_counts": {
+          "testChunkOverlap": 0,
+          "testSimilarity": 0,
+          "devDuplicate": 0,
+          "docCap": 0,
+          "notEligible": 46,
+          "overLimit": 0
+        },
+        "rules": {
+          "behaviors": [
+            "abstain",
+            "handoff",
+            "decline"
+          ],
+          "max_new": 15,
+          "doc_cap_share": 0.05,
+          "no_shared_source_chunks_with_test": true,
+          "max_jaccard_vs_test_exclusive": 0.6
+        }
       }
     },
     "test": {

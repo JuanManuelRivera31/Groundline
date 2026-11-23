@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildSets, jaccard, maxCrossSimilarity, maxDocShare, questionTokens, type BuildOptions } from '../src/build.ts';
-import { validateQuestion } from '../src/schema.ts';
+import { buildSets, extendDev, jaccard, maxCrossSimilarity, maxDocShare, questionTokens, type BuildOptions } from '../src/build.ts';
+import { toQuestion, validateQuestion } from '../src/schema.ts';
 import { answerCandidate, index, unanswerableCandidate } from './fixtures.ts';
 
 const withoutId = <T extends { candidateId: string }>(c: T): Omit<T, 'candidateId'> => {
@@ -106,6 +106,33 @@ describe('buildSets', () => {
     const result = buildSets(cands, index, options({ dev: { billing_account: 2 }, test: { billing_account: 1 } }));
     expect(result.duplicatesDropped).toHaveLength(1);
     expect(maxCrossSimilarity(result.dev, result.test)).toBeLessThan(0.6);
+  });
+
+  it('extends dev with eligible leftovers only, respecting test overlap, similarity and doc cap', () => {
+    const dev = [toQuestion('dev-001', answerCandidate('d1', ['c_b1']))];
+    const test = [
+      toQuestion('test-001', answerCandidate('t1', ['c_c1'], 'billing_account', 'how do i export my stats to excel')),
+      toQuestion('test-002', { ...unanswerableCandidate('t2', 'account_action'), expected_urls: ['https://x.test/docs/delete-account'], source_chunk_ids: ['c_d1'] }),
+    ];
+    const leftovers = [
+      unanswerableCandidate('u1', 'not_covered'),
+      unanswerableCandidate('u2', 'off_topic', 'how do I export stats to excel'), // too close to a test question
+      { ...unanswerableCandidate('u3', 'account_action'), expected_urls: ['https://x.test/docs/delete-account'], source_chunk_ids: ['c_d1'] }, // shares a test chunk
+      unanswerableCandidate('u4', 'prompt_injection'),
+      answerCandidate('a1', ['c_a1']), // not an eligible behavior
+      unanswerableCandidate('u5', 'competitor'),
+    ];
+    const { added, rejected } = extendDev(dev, test, leftovers, index, {
+      maxNew: 2,
+      behaviors: ['abstain', 'handoff', 'decline'],
+      maxDocShare: 1,
+      nearThreshold: 0.6,
+      duplicateThreshold: 0.8,
+      seed: 1,
+    });
+    expect(added.map((q) => q.id)).toEqual(['dev-002', 'dev-003']);
+    expect(added[0]?.expected_behavior).toBe('abstain'); // priority order
+    expect(rejected).toMatchObject({ testChunkOverlap: 1, testSimilarity: 1, notEligible: 1, overLimit: 1 });
   });
 
   it('is deterministic for a seed', () => {
