@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Web-standard globals only (fetch, crypto.subtle, TextEncoder, Intl):
+    // the same surface Cloudflare Workers provides. No @types/node here.
+    "lib": ["ES2024", "DOM"],
+    "types": [],
+    "noEmit": true
+  },
+  "include": ["src", "test"]
+}

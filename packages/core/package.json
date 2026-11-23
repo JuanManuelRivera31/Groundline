@@ -1,0 +1,19 @@
+{
+  "name": "@groundline/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runtime-agnostic core logic (chunking, URL mapping, embeddings, rate limiting). Runs on Node and Cloudflare Workers.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "github-slugger": "2.0.0",
+    "yaml": "2.9.1"
+  }
+}
