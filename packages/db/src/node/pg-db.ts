@@ -2,6 +2,8 @@ import pg from 'pg';
 import type {
   ApiUsageInput,
   CachedEmbeddingRow,
+  CandidateLists,
+  CandidateQuery,
   Db,
   IngestRunFinish,
   IngestRunStart,
@@ -277,6 +279,40 @@ export class PgDb implements Db {
       [query, limit],
     );
     return rows.map(toHit);
+  }
+
+  async searchCandidates(q: CandidateQuery): Promise<CandidateLists> {
+    const vector = toVectorLiteral(q.vector);
+    const vectorRows = this.#pool.query<SearchRow>(
+      `SELECT ${SEARCH_COLUMNS}, 1 - (c.embedding <=> $1::vector) AS score
+       FROM chunks c JOIN documents d ON d.id = c.document_id
+       WHERE c.embedding IS NOT NULL AND c.embedding_model = $2
+       ORDER BY c.embedding <=> $1::vector
+       LIMIT $3`,
+      [vector, q.embeddingModel, q.vectorK],
+    );
+    // Same OR semantics as searchFullText, plus the cosine of each hit to the query vector.
+    const ftsRows = this.#pool.query<SearchRow & { cosine: number | string | null }>(
+      `WITH q AS (
+         SELECT to_tsquery('simple', replace(plainto_tsquery('english', $1)::text, ' & ', ' | ')) AS query
+       )
+       SELECT ${SEARCH_COLUMNS}, ts_rank_cd(c.tsv, q.query) AS score,
+              CASE WHEN c.embedding IS NOT NULL AND c.embedding_model = $3
+                   THEN 1 - (c.embedding <=> $2::vector) END AS cosine
+       FROM chunks c JOIN documents d ON d.id = c.document_id, q
+       WHERE c.tsv @@ q.query
+       ORDER BY score DESC, c.id
+       LIMIT $4`,
+      [q.query, vector, q.embeddingModel, q.ftsK],
+    );
+    const [v, f] = await Promise.all([vectorRows, ftsRows]);
+    return {
+      vector: v.rows.map((row) => {
+        const hit = toHit(row);
+        return { ...hit, cosine: hit.score };
+      }),
+      fullText: f.rows.map((row) => ({ ...toHit(row), cosine: row.cosine === null ? null : Number(row.cosine) })),
+    };
   }
 
   async close(): Promise<void> {

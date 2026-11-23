@@ -95,6 +95,27 @@ export interface SearchHit {
   readonly documentTitle: string;
 }
 
+export interface CandidateHit extends SearchHit {
+  /** Cosine similarity to the query vector (also for full-text hits); null if the chunk has no embedding for the model. */
+  readonly cosine: number | null;
+}
+
+export interface CandidateQuery {
+  readonly query: string;
+  readonly vector: readonly number[];
+  readonly embeddingModel: string;
+  /** Number of vector candidates. */
+  readonly vectorK: number;
+  /** Number of full-text candidates. */
+  readonly ftsK: number;
+}
+
+/** Raw candidate lists for hybrid retrieval; fusion happens in packages/core. */
+export interface CandidateLists {
+  readonly vector: CandidateHit[];
+  readonly fullText: CandidateHit[];
+}
+
 export interface Db {
   upsertSource(source: SourceInput): Promise<number>;
   /** Upserts all documents/chunks of a source and deletes stale ones, in one transaction. */
@@ -116,6 +137,8 @@ export interface Db {
   searchVector(vector: readonly number[], embeddingModel: string, limit: number): Promise<SearchHit[]>;
   /** Full-text search with OR semantics over the query's lexemes, ranked by ts_rank_cd. */
   searchFullText(query: string, limit: number): Promise<SearchHit[]>;
+  /** Vector and full-text candidate lists for one query, each with cosine similarity. */
+  searchCandidates(query: CandidateQuery): Promise<CandidateLists>;
 
   close(): Promise<void>;
 }

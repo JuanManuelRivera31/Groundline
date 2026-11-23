@@ -1,6 +1,7 @@
 import type {
   ApiUsageInput,
   CachedEmbeddingRow,
+  CandidateLists,
   ChunkInput,
   Db,
   DocumentInput,
@@ -113,6 +114,10 @@ export class MemoryDb implements Db {
 
   searchFullText(): Promise<SearchHit[]> {
     return Promise.resolve([]);
+  }
+
+  searchCandidates(): Promise<CandidateLists> {
+    return Promise.resolve({ vector: [], fullText: [] });
   }
 
   close(): Promise<void> {

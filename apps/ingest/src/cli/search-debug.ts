@@ -1,7 +1,9 @@
 import { parseArgs } from 'node:util';
 import {
   DEFAULT_RETRY_POLICY,
+  DEFAULT_RRF_K,
   embedMisses,
+  fuseRrf,
   pacificDayStart,
   planEmbeddings,
   RateLimiter,
@@ -13,6 +15,7 @@ import { cacheStoreFor, TOKEN_SAFETY_FACTOR, usageRecorderFor } from '../pipelin
 import { createEmbeddingClient, errorMessage, systemClock, systemSleep } from '../runtime.ts';
 
 const USAGE = 'Usage: pnpm search:debug "<question>" [--limit 5]';
+const CANDIDATES = 20;
 
 function printHits(title: string, hits: readonly SearchHit[]): void {
   console.log(`\n${title}`);
@@ -78,11 +81,33 @@ async function main(): Promise<void> {
 
     if (vector) {
       console.log(`Query embedding: ${source}`);
-      printHits(`Vector top ${limit} (cosine similarity)`, await db.searchVector(vector, model, limit));
+      const candidates = await db.searchCandidates({
+        query: question,
+        vector,
+        embeddingModel: model,
+        vectorK: CANDIDATES,
+        ftsK: CANDIDATES,
+      });
+      printHits(`Vector top ${limit} (cosine similarity)`, candidates.vector.slice(0, limit));
+      printHits(`Full-text top ${limit} (ts_rank_cd, OR semantics)`, candidates.fullText.slice(0, limit));
+      const fused = fuseRrf(
+        [
+          { name: 'vector', items: candidates.vector },
+          { name: 'fts', items: candidates.fullText },
+        ],
+        { k: DEFAULT_RRF_K, limit },
+      );
+      console.log(`\nHybrid top ${limit} (RRF k=${DEFAULT_RRF_K} over ${CANDIDATES}+${CANDIDATES} candidates)`);
+      fused.forEach((hit, i) => {
+        const ranks = `vec ${String(hit.ranks.vector ?? '-')} / fts ${String(hit.ranks.fts ?? '-')}`;
+        const cosine = hit.cosine === null ? 'n/a' : hit.cosine.toFixed(4);
+        console.log(`  ${i + 1}. rrf ${hit.rrfScore.toFixed(4)} | cos ${cosine} | ${ranks}  ${hit.item.headingPath}`);
+        console.log(`     ${hit.item.url}`);
+      });
     } else {
-      console.log('\nVector search skipped: GEMINI_API_KEY is not set and the query is not cached.');
+      console.log('\nVector and hybrid search skipped: GEMINI_API_KEY is not set and the query is not cached.');
+      printHits(`Full-text top ${limit} (ts_rank_cd, OR semantics)`, await db.searchFullText(question, limit));
     }
-    printHits(`Full-text top ${limit} (ts_rank_cd, OR semantics)`, await db.searchFullText(question, limit));
   } finally {
     await db.close();
   }
