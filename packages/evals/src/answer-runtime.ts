@@ -16,6 +16,12 @@ import type { Db } from '@groundline/db';
 import { cacheStoreFor, createEmbeddingClient, usageRecorderFor } from './io.ts';
 
 const clock = { now: (): number => Date.now() };
+
+/**
+ * Generation 503s come in "high demand" bursts lasting minutes. A slower
+ * backoff spends fewer quota-counted attempts per burst than the embedding one.
+ */
+export const GENERATION_RETRY_POLICY = { baseDelayMs: 5_000, maxDelayMs: 120_000 } as const;
 const sleep = (ms: number): Promise<void> => delay(ms);
 
 export interface QuotaStatus {
@@ -138,7 +144,7 @@ export async function createAnswerRuntime(
       generation: lazyGeneration,
       call: {
         limiter: genLimiter,
-        retry: { ...DEFAULT_RETRY_POLICY, maxRetries: emb.maxRetries },
+        retry: { ...GENERATION_RETRY_POLICY, maxRetries: emb.maxRetries },
         sleep,
         random: Math.random,
         clock,
