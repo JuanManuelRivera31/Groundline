@@ -92,9 +92,10 @@ export function applyPolicy(
   model: ModelAnswer,
   sources: readonly AnswerSource[],
   bounds?: QuoteBounds,
+  codeBlocks = false,
 ): PolicyOutcome {
   const answered = model.status === 'answered';
-  const validation = validateAnswer(model, sources, { requireMarkers: answered, bounds });
+  const validation = validateAnswer(model, sources, { requireMarkers: answered, bounds, codeBlocks });
   const lang = fallbackLanguage(question);
 
   if (answered && !validation.hasSupportedSentence) {

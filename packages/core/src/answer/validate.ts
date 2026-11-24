@@ -4,6 +4,7 @@ import type {
   InvalidCitationReason,
   ModelAnswer,
   ModelCitation,
+  RemovalReason,
   RemovedSentence,
   VerifiedCitation,
 } from './types.ts';
@@ -129,6 +130,89 @@ export function splitSentences(line: string): string[] {
   return merged.map((s) => s.replace(/\s+\[/g, ' [').trim()).filter((s) => s.length > 0);
 }
 
+export interface ValidateOptions {
+  readonly requireMarkers: boolean;
+  readonly bounds?: QuoteBounds | undefined;
+  /** Validate fenced code blocks as verbatim source excerpts (prompt v3+). Off: fences are plain text lines, as before. */
+  readonly codeBlocks?: boolean | undefined;
+}
+
+/** Maximum lines of a code block shown in an answer. */
+export const MAX_CODE_LINES = 40;
+
+const CODE_PLACEHOLDER = '\uE000CODE';
+const CODE_PLACEHOLDER_RE = /\uE000CODE(\d+)\uE000CODE/g;
+const FENCE = /^\s*(```|~~~)/;
+
+type Entry =
+  | { readonly kind: 'text'; readonly text: string }
+  | { readonly kind: 'code'; readonly raw: string; readonly lines: readonly string[] };
+
+/** Splits an answer into text lines and fenced code blocks (an unclosed fence runs to the end). */
+function splitEntries(answer: string, codeBlocks: boolean): Entry[] {
+  const lines = answer.replace(/\r\n?/g, '\n').split('\n');
+  if (!codeBlocks) return lines.map((text) => ({ kind: 'text', text }));
+  const entries: Entry[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    const fence = FENCE.exec(line);
+    if (!fence?.[1]) {
+      entries.push({ kind: 'text', text: line });
+      continue;
+    }
+    const body: string[] = [];
+    let j = i + 1;
+    while (j < lines.length && !(lines[j] ?? '').trim().startsWith(fence[1])) body.push(lines[j++] ?? '');
+    const closing = j < lines.length ? (lines[j] ?? '') : fence[1];
+    entries.push({ kind: 'code', raw: [line, ...body, closing.trim()].join('\n'), lines: body });
+    i = j;
+  }
+  return entries;
+}
+
+/** Valid markers of the nearest kept sentence before a code block, else after it. */
+function adjacentMarkers(entries: readonly Entry[], out: readonly (string | null)[], last: readonly number[][], first: readonly number[][], index: number): number[] {
+  for (let k = index - 1; k >= 0; k--) {
+    if (entries[k]?.kind === 'code') break;
+    const line = out[k];
+    if (line === null || line === undefined || line.trim() === '') continue;
+    if ((last[k] ?? []).length > 0) return last[k] ?? [];
+    break;
+  }
+  for (let k = index + 1; k < entries.length; k++) {
+    if (entries[k]?.kind === 'code') break;
+    const line = out[k];
+    if (line === null || line === undefined || line.trim() === '') continue;
+    return first[k] ?? [];
+  }
+  return [];
+}
+
+/** Why a code block is rejected, or null when it is a verbatim excerpt of one of the given sources. */
+export function checkCodeBlock(
+  lines: readonly string[],
+  sourceIds: readonly string[],
+  sources: ReadonlyMap<string, AnswerSource>,
+  normalizedSources = new Map<string, string>(),
+): RemovalReason | null {
+  const nonEmpty = lines.filter((l) => l.trim().length > 0);
+  if (nonEmpty.length === 0) return 'failed_code';
+  if (nonEmpty.length > MAX_CODE_LINES) return 'code_too_long';
+  if (sourceIds.length === 0) return 'failed_code';
+  const code = normalizeForMatch(lines.join('\n'));
+  for (const id of sourceIds) {
+    const source = sources.get(id);
+    if (!source) continue;
+    let haystack = normalizedSources.get(id);
+    if (haystack === undefined) {
+      haystack = normalizeForMatch(source.text);
+      normalizedSources.set(id, haystack);
+    }
+    if (haystack.includes(code)) return null;
+  }
+  return 'failed_code';
+}
+
 export interface ValidationOutcome {
   readonly answer: string;
   readonly citations: VerifiedCitation[];
@@ -147,7 +231,7 @@ export interface ValidationOutcome {
 export function validateAnswer(
   model: Pick<ModelAnswer, 'answer' | 'citations'>,
   sources: readonly AnswerSource[],
-  options: { readonly requireMarkers: boolean; readonly bounds?: QuoteBounds | undefined },
+  options: ValidateOptions,
 ): ValidationOutcome {
   const byId = new Map(sources.map((s) => [s.id, s]));
   const normalized = new Map<string, string>();
@@ -166,10 +250,18 @@ export function validateAnswer(
 
   const removedSentences: RemovedSentence[] = [];
   let hasSupportedSentence = false;
-  const lines: string[] = [];
-  for (const rawLine of model.answer.replace(/\r\n?/g, '\n').split('\n')) {
+
+  // Split into text lines and (when enabled) fenced code blocks.
+  const entries = splitEntries(model.answer, options.codeBlocks ?? false);
+  const out: (string | null)[] = entries.map(() => null);
+  const firstMarkers: number[][] = entries.map(() => []);
+  const lastMarkers: number[][] = entries.map(() => []);
+
+  for (const [i, entry] of entries.entries()) {
+    if (entry.kind === 'code') continue;
+    const rawLine = entry.text;
     if (rawLine.trim() === '') {
-      lines.push('');
+      out[i] = '';
       continue;
     }
     const prefix = BULLET.exec(rawLine)?.[1] ?? '';
@@ -187,6 +279,8 @@ export function validateAnswer(
         continue;
       }
       hasSupportedSentence = true;
+      if (firstMarkers[i]?.length === 0) firstMarkers[i] = valid;
+      lastMarkers[i] = valid;
       kept.push(
         sentence
           .replace(MARKER_GROUP, (_m, group: string) => {
@@ -201,19 +295,37 @@ export function validateAnswer(
           .trim(),
       );
     }
-    if (kept.length > 0) lines.push(prefix + kept.join(' '));
+    if (kept.length > 0) out[i] = prefix + kept.join(' ');
   }
 
-  // Renumber markers by first appearance.
+  // Code blocks: kept only if verbatim in a source cited by an adjacent sentence.
+  const codeBlocks: string[] = [];
+  for (const [i, entry] of entries.entries()) {
+    if (entry.kind !== 'code') continue;
+    const markers = adjacentMarkers(entries, out, lastMarkers, firstMarkers, i);
+    const sourceIds = new Set(markers.flatMap((m) => (validByMarker.get(m) ?? []).map((c) => c.source_id)));
+    const reason = checkCodeBlock(entry.lines, [...sourceIds], byId, normalized);
+    if (reason) {
+      removedSentences.push({ text: entry.raw, reason });
+      continue;
+    }
+    out[i] = `${CODE_PLACEHOLDER}${codeBlocks.length}${CODE_PLACEHOLDER}`;
+    codeBlocks.push(entry.raw);
+  }
+  const lines = out.filter((l): l is string => l !== null);
+
+  // Renumber markers by first appearance (code blocks are masked so their brackets are left alone).
   const text = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   const renumber = new Map<number, number>();
   for (const m of markersIn(text)) if (!renumber.has(m)) renumber.set(m, renumber.size + 1);
-  const answer = text.replace(MARKER_GROUP, (_m, group: string) =>
-    group
-      .split(',')
-      .map((n) => `[${renumber.get(Number(n.trim())) ?? n.trim()}]`)
-      .join(''),
-  );
+  const answer = text
+    .replace(MARKER_GROUP, (_m, group: string) =>
+      group
+        .split(',')
+        .map((n) => `[${renumber.get(Number(n.trim())) ?? n.trim()}]`)
+        .join(''),
+    )
+    .replace(CODE_PLACEHOLDER_RE, (_m, n: string) => codeBlocks[Number(n)] ?? '');
 
   const citations: VerifiedCitation[] = [];
   const seen = new Set<string>();

@@ -84,7 +84,7 @@ export interface InvalidCitation extends ModelCitation {
   readonly reason: InvalidCitationReason;
 }
 
-export type RemovalReason = 'failed_citation' | 'unmarked_claim';
+export type RemovalReason = 'failed_citation' | 'unmarked_claim' | 'failed_code' | 'code_too_long';
 
 export interface RemovedSentence {
   readonly text: string;
