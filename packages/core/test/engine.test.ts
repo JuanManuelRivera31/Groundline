@@ -22,7 +22,19 @@ const chunk = (chunkId: number, url: string, ord: number, cosine: number | null,
 const TRIAL = 'The free trial lasts 30 days and needs no credit card.';
 const ranked = [chunk(1, 'https://x.test/docs/billing#refunds', 0, 0.8, 'Refunds within 30 days for annual plans.'), chunk(2, 'https://x.test/docs/trial', 0, 0.7, TRIAL)];
 
-const reply = (over: Partial<ModelAnswer> = {}): string =>
+/** v2 output: [Sx] markers, citations without marker. */
+const reply = (over: Record<string, unknown> = {}): string =>
+  JSON.stringify({
+    status: 'answered',
+    declined_injection: false,
+    answer: 'The trial lasts 30 days and needs no card [S2].',
+    citations: [{ source_id: 'S2', quote: 'lasts 30 days and needs no credit card' }],
+    handoff_reason: '',
+    ...over,
+  });
+
+/** v1 output: numeric markers with citation.marker. */
+const replyV1 = (over: Partial<ModelAnswer> = {}): string =>
   JSON.stringify({
     status: 'answered',
     declined_injection: false,
@@ -168,10 +180,10 @@ describe('answerQuestion — eval mode', () => {
     expect(s.usage).toEqual([{ model: 'gemini-3.5-flash-lite', httpStatus: 200 }]);
   });
 
-  it('uses the configured prompt version', async () => {
-    const s = setup((t) => [client('m1', t, [{ text: reply() }])]);
+  it('uses the configured prompt version with its own marker style (v1 numeric)', async () => {
+    const s = setup((t) => [client('m1', t, [{ text: replyV1() }])]);
     const result = await answerQuestion({ ...s.deps, config: { ...s.deps.config, promptVersion: 'v1' } }, 'q');
-    expect(result.promptVersion).toBe('v1');
+    expect(result).toMatchObject({ promptVersion: 'v1', status: 'answered', answer: 'The trial lasts 30 days and needs no card [1].' });
   });
 
   it('retries the primary patiently and never uses the fallback model', async () => {
@@ -194,6 +206,76 @@ describe('answerQuestion — eval mode', () => {
   it('throws on embedding errors (no fallback outside live mode)', async () => {
     const s = setup((t) => [client('m1', t, [])], { embedQuery: () => Promise.reject(new Error('HTTP 503 embeddings')) });
     await expect(answerQuestion(s.deps, 'q')).rejects.toThrow('HTTP 503 embeddings');
+  });
+});
+
+describe('answerQuestion — v2 source markers', () => {
+  const rankedThree = [
+    chunk(1, 'https://x.test/docs/billing#refunds', 0, 0.8, 'Refunds within 30 days for annual plans.'),
+    chunk(2, 'https://x.test/docs/trial', 0, 0.7, TRIAL),
+    chunk(3, 'https://x.test/docs/plans', 0, 0.65, 'Every plan includes unlimited team members and email reports.'),
+  ];
+  const run = async (answer: string, citations: { source_id: string; quote: string }[]) => {
+    const s = setup((t) => [client('m1', t, [{ text: reply({ answer, citations }) }])], { retrieve: () => Promise.resolve(rankedThree) });
+    return answerQuestion(s.deps, 'q');
+  };
+
+  it('sends a schema whose citations have only source_id and quote', async () => {
+    const seen: unknown[] = [];
+    const s = setup((t) => {
+      const c = client('m1', t, [{ text: reply() }]);
+      return [
+        {
+          model: 'm1',
+          generate: (req) => {
+            seen.push(req.responseSchema);
+            return c.generate(req);
+          },
+        },
+      ];
+    });
+    await answerQuestion(s.deps, 'q');
+    const schema = seen[0] as { properties: { citations: { items: { properties: Record<string, unknown>; required: string[] } } } };
+    expect(Object.keys(schema.properties.citations.items.properties)).toEqual(['source_id', 'quote']);
+    expect(schema.properties.citations.items.required).toEqual(['source_id', 'quote']);
+  });
+
+  it('renumbers [Sx] markers to [1], [2] in order of appearance', async () => {
+    const result = await run('Every plan includes unlimited team members [S3]. The trial lasts 30 days [S2]. Plans include email reports [S3].', [
+      { source_id: 'S2', quote: 'The free trial lasts 30 days' },
+      { source_id: 'S3', quote: 'Every plan includes unlimited team members' },
+      { source_id: 'S3', quote: 'unlimited team members and email reports' },
+    ]);
+    expect(result.status).toBe('answered');
+    expect(result.answer).toBe('Every plan includes unlimited team members [1]. The trial lasts 30 days [2]. Plans include email reports [1].');
+    expect(result.citations.map((c) => [c.marker, c.sourceId])).toEqual([
+      [1, 'S3'],
+      [1, 'S3'],
+      [2, 'S2'],
+    ]);
+  });
+
+  it('accepts grouped markers and keeps only the sources with a verified quote', async () => {
+    const result = await run('Refunds take 30 days and the trial is free [S1, S2]. Annual plans can be refunded [S1][S3].', [
+      { source_id: 'S1', quote: 'Refunds within 30 days for annual plans' },
+      { source_id: 'S2', quote: 'this quote is not in the source at all' },
+    ]);
+    expect(result.answer).toBe('Refunds take 30 days and the trial is free [1]. Annual plans can be refunded [1].');
+    expect(result.invalidCitations.map((c) => [c.source_id, c.reason])).toEqual([['S2', 'quote_not_found']]);
+  });
+
+  it('removes sentences whose only marker has no verified quote from that source, or names an unsent source', async () => {
+    const result = await run('The trial lasts 30 days [S2]. Refunds exist [S1]. Something else [S9].', [{ source_id: 'S2', quote: 'The free trial lasts 30 days' }]);
+    expect(result.answer).toBe('The trial lasts 30 days [1].');
+    expect(result.removedSentences.map((r) => [r.text, r.reason])).toEqual([
+      ['Refunds exist [1].', 'failed_citation'],
+      ['Something else [9].', 'failed_citation'],
+    ]);
+  });
+
+  it('never accepts a bare numeric marker in v2 output (the S3 confusion)', async () => {
+    const result = await run('The trial lasts 30 days [2].', [{ source_id: 'S2', quote: 'The free trial lasts 30 days' }]);
+    expect(result).toMatchObject({ status: 'insufficient', error: 'no_valid_citations' });
   });
 });
 

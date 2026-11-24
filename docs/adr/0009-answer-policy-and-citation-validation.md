@@ -79,6 +79,12 @@ Prompts live in a registry (`packages/core/src/answer/prompts/`; `ANSWER_PROMPT_
 - **Absence:** if the docs don't mention a feature or option, say they don't cover it (`insufficient` plus the human offer). Never claim something doesn't exist or can't be done unless a source says so.
 - **Competitors:** any request to compare with another tool, or to judge better or worse, is always `declined`, even when related docs exist, with an offer to explain how the product works on that topic.
   - Two short examples use invented tool names (AcmeStats, OtherMetrics), so they can't come from dev or test.
+- **Source-id markers:** v1 had two numbering schemes, citation markers [1] and sources S1, and the model confused them (dev-053 and dev-056 wrote [3] for S3). v2 removes the second scheme:
+  - The answer text cites with the source id, `[S1]` or `[S1][S3]`, and citations are `{source_id, quote}` with no marker (schema `sourceMarkerResponseSchema`).
+  - A sentence is valid when each `[Sx]` it contains has at least one verified quote from that same source. Markers without a verified quote are dropped with the same cascade as before, and a sentence with no marker left is removed.
+  - Internally `[S3]` becomes marker 3, bound to S3's citations, so the validator is unchanged. A bare numeric marker in v2 output never validates.
+  - Markers are renumbered to [1], [2]… in order of appearance for display, so the customer sees no difference.
+  - v1 and the S3 re-validation keep the numeric scheme.
 
 ### Availability: eval vs live mode
 - **Eval mode** (`eval:answers`) uses the primary model only, with patient retries (backoff base 5 s, cap 120 s), so one model is measured.

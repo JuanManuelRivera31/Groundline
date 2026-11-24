@@ -8,7 +8,7 @@ import { QuotaExceededError, RateLimitWaitError, type Clock, type RateLimiterLik
 import { estimateTokens } from '../tokens.ts';
 import { applyPolicy, fallbackOutcome, unavailableOutcome, type PolicyOutcome } from './policy.ts';
 import { DEFAULT_PROMPT_VERSION, getPrompt } from './prompts/index.ts';
-import { answerResponseSchema, parseModelAnswer } from './schema.ts';
+import { parseModelAnswer } from './schema.ts';
 import { groupSources, maxSimilarity } from './sources.ts';
 import type {
   AnswerMode,
@@ -188,7 +188,7 @@ export async function answerQuestion(deps: AnswerEngineDeps, question: string): 
   // 3. Generation.
   const user = prompt.buildUserContent(question, sources);
   const estTokens = estimateTokens(prompt.system) + estimateTokens(user);
-  const request = { system: prompt.system, user, responseSchema: answerResponseSchema(sources.map((s) => s.id)) };
+  const request = { system: prompt.system, user, responseSchema: prompt.responseSchema(sources.map((s) => s.id)) };
   const cost = { requests: 1, tokens: Math.ceil(estTokens * 1.2) + config.maxOutputTokens };
   const run = mode === 'eval' ? await generateEval(deps, primary, request, cost, estTokens) : await generateLive(deps, request, cost, estTokens, remaining);
 
@@ -209,7 +209,7 @@ export async function answerQuestion(deps: AnswerEngineDeps, question: string): 
     articles = topArticles(sources.map((s: AnswerSource) => ({ title: s.title, url: s.url })));
     outcome = unavailableOutcome(question, articles, run.error ?? 'generation_unavailable');
   } else {
-    const parsed = run.result.finishReason === 'STOP' ? parseModelAnswer(run.result.text) : null;
+    const parsed = run.result.finishReason === 'STOP' ? parseModelAnswer(run.result.text, prompt.markerStyle) : null;
     if (parsed?.ok) {
       modelStatus = parsed.value.status;
       modelCitations = parsed.value.citations;

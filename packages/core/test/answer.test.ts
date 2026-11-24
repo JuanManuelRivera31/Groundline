@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyPolicy, fallbackLanguage, FALLBACK_MESSAGES } from '../src/answer/policy.ts';
 import { buildUserContentV1, neutralizeDelimiters } from '../src/answer/prompts/v1.ts';
-import { answerResponseSchema, parseModelAnswer } from '../src/answer/schema.ts';
+import { answerResponseSchema, ORPHAN_MARKER_BASE, parseModelAnswer, sourceMarkersToInternal, sourceNumber } from '../src/answer/schema.ts';
 import { groupSources, maxSimilarity } from '../src/answer/sources.ts';
 import type { AnswerSource, ModelAnswer, RetrievedChunk } from '../src/answer/types.ts';
 import { checkCitation, isClaim, normalizeForMatch, splitSentences, validateAnswer } from '../src/answer/validate.ts';
@@ -95,6 +95,21 @@ describe('schema', () => {
     expect(parseModelAnswer(JSON.stringify({ ...model({}), status: 'maybe' })).ok).toBe(false);
     expect(parseModelAnswer(JSON.stringify({ ...model({}), citations: [{ marker: 0, source_id: 'S1', quote: 'x' }] })).ok).toBe(false);
     expect(parseModelAnswer(JSON.stringify({ ...model({}), declined_injection: 'no' })).ok).toBe(false);
+  });
+});
+
+describe('source-style markers', () => {
+  it('maps [Sx] to the source number and bare numbers to orphan markers', () => {
+    expect(sourceNumber('S3')).toBe(3);
+    expect(sourceNumber('x3')).toBeNull();
+    expect(sourceMarkersToInternal('a [S3]. b [S1, S2]. c [s4][S5]. d [2].')).toBe(`a [3]. b [1, 2]. c [4][5]. d [${ORPHAN_MARKER_BASE + 2}].`);
+  });
+
+  it('parses v2 citations without marker and rejects a missing quote', () => {
+    const text = JSON.stringify({ status: 'answered', declined_injection: false, answer: 'A [S2].', citations: [{ source_id: 'S2', quote: 'q q q' }], handoff_reason: '' });
+    expect(parseModelAnswer(text, 'source')).toMatchObject({ ok: true, value: { answer: 'A [2].', citations: [{ marker: 2, source_id: 'S2' }] } });
+    const bad = JSON.stringify({ status: 'answered', declined_injection: false, answer: 'A', citations: [{ source_id: 'S2' }], handoff_reason: '' });
+    expect(parseModelAnswer(bad, 'source').ok).toBe(false);
   });
 });
 
