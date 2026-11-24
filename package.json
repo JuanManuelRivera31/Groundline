@@ -27,7 +27,8 @@
     "ask": "node apps/ingest/src/cli/ask.ts",
     "eval:calibrate-floor": "node packages/evals/src/cli/calibrate-floor.ts",
     "eval:answers": "node packages/evals/src/cli/eval-answers.ts",
-    "eval:aggregate": "node packages/evals/src/cli/aggregate.ts"
+    "eval:aggregate": "node packages/evals/src/cli/aggregate.ts",
+    "eval:revalidate": "node packages/evals/src/cli/revalidate.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

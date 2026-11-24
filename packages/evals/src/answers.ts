@@ -1,4 +1,4 @@
-import type { AnswerResult, AnswerStatus } from '@groundline/core';
+import type { AnswerResult, AnswerStatus, ModelStatus } from '@groundline/core';
 import { distribution, quantile, stripAnchor, wilson, type Distribution, type Interval } from './metrics.ts';
 import { BEHAVIORS, type Category, type EvalQuestion, type ExpectedBehavior } from './schema.ts';
 
@@ -14,7 +14,7 @@ export interface AnswerRecord {
   readonly reference_answer: string;
   readonly key_facts: readonly string[];
   readonly status: AnswerStatus;
-  readonly model_status: AnswerStatus | null;
+  readonly model_status: ModelStatus | null;
   readonly declined_injection: boolean;
   readonly answer: string;
   readonly citations: readonly { marker: number; source_id: string; url: string; quote: string }[];

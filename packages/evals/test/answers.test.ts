@@ -58,7 +58,7 @@ function record(
     reference_answer: 'ref',
     key_facts: ['fact'],
     status,
-    model_status: status,
+    model_status: status === 'unavailable' ? null : status,
     declined_injection: false,
     answer: 'text',
     citations: [],

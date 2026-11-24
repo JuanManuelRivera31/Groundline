@@ -6,3 +6,4 @@ export * from './floor.ts';
 export * from './answers.ts';
 export * from './answer-runtime.ts';
 export { loadConfig } from './io.ts';
+export * from './revalidate.ts';
