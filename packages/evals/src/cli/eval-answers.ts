@@ -189,7 +189,13 @@ async function main(): Promise<void> {
     const maxRequests = values['max-requests'] === undefined ? Math.min(g.remaining, generationNeeded + 20) : Number(values['max-requests']);
     if (!Number.isInteger(maxRequests) || maxRequests < 1) throw new Error('--max-requests must be a positive integer.');
     console.log(`Generation request cap for this run (incl. retries): ${maxRequests}`);
-    if (generationNeeded > g.remaining) throw new Error(`Not enough generation quota: need ${generationNeeded}, ${g.remaining} remain today.`);
+    // An explicit --max-requests (≤ remaining quota) allows a partial run that stops at the cap and resumes later.
+    if (values['max-requests'] !== undefined) {
+      if (maxRequests > g.remaining) throw new Error(`--max-requests ${maxRequests} exceeds the ${g.remaining} requests remaining today.`);
+      if (generationNeeded > maxRequests) console.log(`Partial run: up to ${maxRequests} of ${generationNeeded} needed requests; resume after the quota resets.`);
+    } else if (generationNeeded > g.remaining) {
+      throw new Error(`Not enough generation quota: need ${generationNeeded}, ${g.remaining} remain today. Use --max-requests N to run until the cap.`);
+    }
     if (plan.misses.length > e.remaining) throw new Error(`Not enough embedding quota: need ${plan.misses.length}, ${e.remaining} remain today.`);
 
     await mkdir(RUNS_DIR, { recursive: true });
