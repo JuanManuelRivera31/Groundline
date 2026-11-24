@@ -65,6 +65,34 @@ S2 showed that max cosine separates answerable from unanswerable questions (AUC 
 - Default model `gemini-3.5-flash-lite`: the newest Flash-Lite returned by `models.list` on 2026-11-23, pinned rather than the `-latest` alias.
 - **Equivalent cost** = tokens × paid list price (`packages/core/src/pricing/list-prices.ts`, with source URL and verification date). Thinking tokens are priced as output, and the query embedding is priced on its estimated tokens. The free tier actually costs $0.
 
+## Amendment S5a (2026-11-24): validator bounds, prompt v2, availability
+
+### Citation validator
+- A quote is valid if it is verbatim (normalized substring), its source was sent, and it has **3–80 words** (`MIN_QUOTE_WORDS`, `MAX_QUOTE_WORDS`). Quotes over 80 words are still rejected; under 3 is `quote_too_short`.
+- The S3 cap of 25 words was a design error. All 42 quotes rejected in S3 were verbatim (26–139 words), and 20 of the 21 answer questions downgraded to "I don't know" failed only for length.
+- Re-validating the stored S3 answers offline with the new bounds turned 15 of them into answers (`pnpm eval:revalidate`). Every run now records the quote-length distribution.
+
+### Prompt v2
+Prompts live in a registry (`packages/core/src/answer/prompts/`; `ANSWER_PROMPT_VERSION`, default `v2`). v1 is unchanged for comparison. v2 changes, all general:
+- **Quotes:** the shortest verbatim sentence or sentences that support each claim, ideally ≤ 40 words.
+- **Strict support:** every claim must be stated in the cited source. No causes, consequences, clarifications or generalizations the source doesn't state.
+- **Absence:** if the docs don't mention a feature or option, say they don't cover it (`insufficient` plus the human offer). Never claim something doesn't exist or can't be done unless a source says so.
+- **Competitors:** any request to compare with another tool, or to judge better or worse, is always `declined`, even when related docs exist, with an offer to explain how the product works on that topic.
+  - Two short examples use invented tool names (AcmeStats, OtherMetrics), so they can't come from dev or test.
+
+### Availability: eval vs live mode
+- **Eval mode** (`eval:answers`) uses the primary model only, with patient retries (backoff base 5 s, cap 120 s), so one model is measured.
+- **Live mode** (`pnpm ask`, the future API) walks the model chain `GEN_MODELS` (default `gemini-3.5-flash-lite,gemini-3.1-flash-lite`, both listed as Stable) within `GEN_LIVE_BUDGET_MS = 8000` per answer, retrieval included.
+  - Each model has its own client-side limiter (`GEN_LIMITS="model=rpm/tpm/rpd;…"`, falling back to `GEN_RPM/TPM/RPD`, then to 10 / 100,000 / 200).
+  - A spent local quota or a too-long minute-window wait skips the model.
+  - Every HTTP call gets an abort signal set to the remaining time.
+  - **503, other 5xx, timeouts and network errors switch to the next model at once.** A 429 waits for its `retryDelay` and retries the same model once, only if that fits the budget; otherwise it switches. Other 4xx responses switch too.
+  - When the chain or the budget runs out, the status is **`unavailable`**: a fixed message (en/es) plus the 3 most relevant articles (the first 3 distinct documents, title and URL), with a human offer. An unvalidated answer is never shown.
+  - **Query embedding in live mode:** cache first, then one attempt inside the same budget, without backoff. If it fails or doesn't fit, full-text search (no API) picks the 3 articles and the answer is `unavailable` (`retrieval_fallback: fts`). If full-text finds nothing, the fixed message goes out without articles (`retrieval_fallback: none`).
+- Every attempt is recorded in `api_usage` with the model actually called. Each run record stores `answered_by`, `hops`, `attempts[]` and `retrieval_fallback`.
+- **Quota accounting:** the official docs don't say whether 503 or 429 responses count against the daily quota. Google recommends exponential backoff with jitter on 429/503 and says nothing about switching models (https://ai.google.dev/gemini-api/docs/troubleshooting). Until that is documented, failed attempts keep counting against the client-side RPD.
+  - Live mode's model switch departs from that advice on purpose: an 8 s budget leaves no room for backoff.
+
 ## Consequences
 
 - A floor hit costs no generation request. Every other question costs exactly one, plus retries on 429/5xx.
@@ -77,4 +105,6 @@ S2 showed that max cosine separates answerable from unanswerable questions (AUC 
 - Gemini generateContent API (systemInstruction, generationConfig, responseJsonSchema, thinkingConfig, usageMetadata): https://ai.google.dev/api/generate-content
 - Gemini thinking levels (3.x Flash-Lite default "minimal"): https://ai.google.dev/gemini-api/docs/thinking
 - Gemini API pricing, read 2026-11-23 (gemini-3.5-flash-lite $0.30 / $2.50 per 1M input / output tokens incl. thinking; gemini-embedding-001 $0.15 per 1M): https://ai.google.dev/gemini-api/docs/pricing
-- Gemini rate limits (free-tier values only shown in AI Studio): https://ai.google.dev/gemini-api/docs/rate-limits
+- Gemini rate limits (free-tier values only shown in AI Studio; no statement on whether failed requests count): https://ai.google.dev/gemini-api/docs/rate-limits
+- Gemini troubleshooting, retry strategy (exponential backoff on 429/503), read 2026-11-24: https://ai.google.dev/gemini-api/docs/troubleshooting
+- Gemini models (gemini-3.5-flash-lite and gemini-3.1-flash-lite listed as Stable), read 2026-11-24: https://ai.google.dev/gemini-api/docs/models

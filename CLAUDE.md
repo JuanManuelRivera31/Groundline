@@ -31,10 +31,12 @@ Groundline is a reusable AI support-agent kit. It answers customer questions **o
 | `pnpm corpus:export --source plausible` | Write `data/eval-work/chunks.jsonl` (stable chunk ids; no network, no DB) |
 | `pnpm eval:build-sets` | Build and freeze `evals/plausible/{dev,test}.jsonl` from verified candidates (write-once) |
 | `pnpm eval:retrieval --set dev --mode vector\|fts\|hybrid\|all` | Retrieval metrics on dev (refuses `--set test`); writes `evals/runs/` |
-| `pnpm ask "<question>"` | One grounded answer: status, cited answer, sources, max similarity vs floor, latency, tokens, equivalent cost |
+| `pnpm ask "<question>"` | One grounded answer in live mode (model chain, 8 s budget, `unavailable` fallback): status, cited answer, sources, max similarity vs floor, latency, tokens, equivalent cost |
 | `pnpm eval:calibrate-floor --set dev` | FLOOR from the latest dev vector run + sensitivity table (no API, no DB) |
 | `pnpm eval:answers --set dev [--label x] [--dry-run]` | Answer run on dev (refuses `--set test`); writes the run, code metrics and judge batches to `evals/runs/` |
 | `pnpm eval:answers --set dev --external answers.csv` | Audit another bot's answers (`id,answer`) with the same judge; no API calls |
+| `pnpm eval:revalidate <run.json>` | Re-apply the current validator to a stored answer run (no API); judge batches only for status changes |
+| `pnpm eval:answers --set dev --live --sample 12` | Live-mode sample (model chain + 8 s budget) for latency and availability |
 | `pnpm eval:aggregate <run.json>` | Validate judgments and merge code + judge metrics against the targets |
 
 Node 26 runs the TypeScript sources directly (type stripping), so there is no compile step for the CLIs.
