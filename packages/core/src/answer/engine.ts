@@ -219,7 +219,8 @@ export async function answerQuestion(deps: AnswerEngineDeps, question: string): 
     }
   }
 
-  const totalMs = clock.now() - start - run.queueWaitMs;
+  // Eval mode excludes limiter queue wait (it measures the pipeline); in live mode the customer waits it too.
+  const totalMs = clock.now() - start - (mode === 'live' ? 0 : run.queueWaitMs);
   return finish(deps, outcome, {
     ...common,
     modelStatus,

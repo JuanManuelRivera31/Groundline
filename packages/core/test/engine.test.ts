@@ -312,6 +312,22 @@ describe('answerQuestion — live mode', () => {
     expect(s.t.sleeps).toEqual([]);
   });
 
+  it('counts limiter queue wait as customer latency in live mode', async () => {
+    const t0 = fakeTime();
+    const s = setup((t) => [client('m1', t, [{ text: reply() }, { text: reply() }], 500)]);
+    const limiter = new RateLimiter({ limits: { rpm: 1, tpm: 100_000, rpd: 200 }, clock: s.t.clock, sleep: s.t.sleep });
+    const primary = s.deps.chain[0];
+    if (!primary) throw new Error('missing chain');
+    const deps: AnswerEngineDeps = { ...live(s), chain: [{ client: primary.client, limiter }] };
+    await limiter.acquire({ requests: 1, tokens: 1 });
+    s.t.advance(55_000); // the minute window frees up in 5 s, which fits the 8 s budget
+    const result = await answerQuestion(deps, 'q');
+    expect(result.status).toBe('answered');
+    expect(result.latency.queueWaitMs).toBe(5_000);
+    expect(result.latency.totalMs).toBe(5_500);
+    expect(t0.sleeps).toEqual([]);
+  });
+
   it('skips a model whose local daily quota is spent', async () => {
     const s = setup((t) => [client('m1', t, [{ text: reply() }]), client('m2', t, [{ text: reply() }])], { usedToday: [200, 0] });
     const result = await answerQuestion(live(s), 'q');
