@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { answerQuestion, generationLimitDefaults, maxSimilarity, planEmbeddings, PROMPT_VERSION, type AppConfig } from '@groundline/core';
+import { answerQuestion, generationLimitDefaults, maxSimilarity, mulberry32, planEmbeddings, PROMPT_VERSION, shuffled, type AppConfig } from '@groundline/core';
 import { PgDb } from '@groundline/db/node';
 import { createAnswerRuntime } from '../answer-runtime.ts';
 import {
@@ -20,7 +20,9 @@ import { cacheStoreFor, CHUNKS_FILE, DEV_FILE, errorMessage, loadConfig, REPO_RO
 import { assertSetAllowed } from '../retrieval.ts';
 import { parseJsonl, toJsonl, type EvalQuestion } from '../schema.ts';
 
-const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--dry-run] [--batch-size 10] [--max-requests N] [--resume <run>.partial.jsonl] | --set dev --external answers.csv [--label name]';
+const SAMPLE_SEED = 20261123;
+
+const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--prompt v2] [--live] [--sample N] [--dry-run] [--batch-size 10] [--max-requests N] [--resume <run>.partial.jsonl] | --set dev --external answers.csv [--label name]';
 
 async function freeBase(base: string): Promise<string> {
   let candidate = base;
@@ -44,6 +46,9 @@ function configSummary(config: AppConfig): Record<string, unknown> {
   const g = config.generation;
   return {
     generationModel: g.model,
+    modelChain: g.models,
+    liveBudgetMs: g.liveBudgetMs,
+    promptVersion: config.answer.promptVersion,
     temperature: g.temperature,
     maxOutputTokens: g.maxOutputTokens,
     thinkingLevel: g.thinkingLevel ?? 'OFF',
@@ -99,6 +104,9 @@ async function main(): Promise<void> {
       'dry-run': { type: 'boolean', default: false },
       'batch-size': { type: 'string', default: '10' },
       'max-requests': { type: 'string' },
+      live: { type: 'boolean', default: false },
+      sample: { type: 'string' },
+      prompt: { type: 'string' },
       resume: { type: 'string' },
       help: { type: 'boolean' },
     },
@@ -113,7 +121,16 @@ async function main(): Promise<void> {
   const label = values.label.replace(/[^\w-]/g, '');
   const batchSize = Number(values['batch-size']);
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 50) throw new Error('--batch-size must be an integer in [1, 50].');
-  const questions = parseJsonl(await readFile(DEV_FILE, 'utf8')) as EvalQuestion[];
+  const allQuestions = parseJsonl(await readFile(DEV_FILE, 'utf8')) as EvalQuestion[];
+  // --sample N: a seeded subset (kept in set order), e.g. for the live-latency sample.
+  let questions = allQuestions;
+  if (values.sample !== undefined) {
+    const n = Number(values.sample);
+    if (!Number.isInteger(n) || n < 1 || n > allQuestions.length) throw new Error(`--sample must be an integer in [1, ${allQuestions.length}].`);
+    const picked = new Set(shuffled(allQuestions, mulberry32(SAMPLE_SEED)).slice(0, n).map((q) => q.id));
+    questions = allQuestions.filter((q) => picked.has(q.id));
+  }
+  const mode = values.live ? 'live' : 'eval';
 
   if (values.external) {
     await runExternal(questions, values.external, label, batchSize);
@@ -130,7 +147,7 @@ async function main(): Promise<void> {
   }
   const db = new PgDb(config.databaseUrl);
   try {
-    const runtime = await createAnswerRuntime(config, db, { embedKind: 'embed_query_eval' });
+    const runtime = await createAnswerRuntime(config, db, { embedKind: 'embed_query_eval', mode, promptVersion: values.prompt });
     const { deps } = runtime;
 
     // Checkpoint: every record is appended to <base>.partial.jsonl as soon as it exists,
@@ -154,9 +171,15 @@ async function main(): Promise<void> {
     const generationNeeded = todo.length - floorHits;
     const g = runtime.generationQuota;
     const e = runtime.embeddingQuota;
-    console.log(`Dev set: ${questions.length} questions | model ${config.generation.model} | prompt ${PROMPT_VERSION} | floor ${deps.config.floor.toFixed(3)}`);
+    const promptVersion = deps.config.promptVersion ?? PROMPT_VERSION;
+    const models = runtime.generationQuotas.map((q) => q.model).join(' → ');
+    console.log(
+      `Dev set: ${questions.length} questions | mode ${mode} | model${mode === 'live' ? ' chain' : ''} ${models} | prompt ${promptVersion} | floor ${deps.config.floor.toFixed(3)}` +
+        (mode === 'live' ? ` | budget ${config.generation.liveBudgetMs} ms` : ''),
+    );
     console.log(`Floor will short-circuit ${floorHits} cached questions (${plan.misses.length} not cached yet).`);
-    console.log(`Generation requests needed: up to ${generationNeeded} (+ retries on 429/5xx) | remaining today (${g.model}): ${g.remaining} of ${g.limit}`);
+    console.log(`Generation requests needed: up to ${generationNeeded} (+ retries on 429/5xx${mode === 'live' ? ' / hops' : ''})`);
+    for (const q of runtime.generationQuotas) console.log(`  remaining today (${q.model}): ${q.remaining} of ${q.limit}`);
     console.log(`Embedding requests needed: ${plan.misses.length} | remaining today (${e.model}): ${e.remaining} of ${e.limit}`);
     if (values['dry-run']) {
       console.log('Dry run: no API calls made.');
@@ -195,7 +218,9 @@ async function main(): Promise<void> {
         spent += record.usage.generationRequests;
         console.log(
           `[${String(i + 1).padStart(2)}/${questions.length}] ${q.id} ${q.expected_behavior.padEnd(7)} -> ${record.status.padEnd(12)}` +
-            `${record.floor_hit ? ' (floor)' : ''} ${(record.latency.totalMs / 1000).toFixed(2)} s${record.error ? ` [${record.error}]` : ''}`,
+            `${record.floor_hit ? ' (floor)' : ''} ${(record.latency.totalMs / 1000).toFixed(2)} s` +
+            (record.answered_by && mode === 'live' ? ` by ${record.answered_by}${record.hops ? ` (${record.hops} hop)` : ''}` : '') +
+            (record.error ? ` [${record.error.slice(0, 80)}]` : ''),
         );
       } catch (error) {
         failure = error;
@@ -214,11 +239,23 @@ async function main(): Promise<void> {
     const createdAt = new Date().toISOString();
     const metrics = computeCodeMetrics(records);
     const partial = records.length < questions.length;
-    const payload = { kind: 'answers', set: 'dev', label, createdAt, partial, promptVersion: PROMPT_VERSION, config: configSummary(config), metrics, records };
+    const payload = {
+      kind: 'answers',
+      set: 'dev',
+      label,
+      createdAt,
+      partial,
+      mode,
+      sample: values.sample === undefined ? null : { n: questions.length, seed: SAMPLE_SEED },
+      promptVersion,
+      config: configSummary(config),
+      metrics,
+      records,
+    };
     await writeFile(`${base}.json`, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
     await writeFile(
       `${base}.md`,
-      `# Answers run (dev${label ? `, ${label}` : ''})\n\n- Created: ${createdAt}\n- Prompt: ${PROMPT_VERSION}; model ${config.generation.model}${partial ? '\n- PARTIAL RUN' : ''}\n\n${codeMetricsMarkdown(metrics)}`,
+      `# Answers run (dev${label ? `, ${label}` : ''})\n\n- Created: ${createdAt}\n- Mode: ${mode}; prompt: ${promptVersion}; model${mode === 'live' ? ' chain' : ''} ${models}${partial ? '\n- PARTIAL RUN' : ''}\n\n${codeMetricsMarkdown(metrics)}`,
       'utf8',
     );
     const dir = await writeJudgeBatches(base, records.map(judgeItemFromRecord), batchSize);

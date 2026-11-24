@@ -1,8 +1,8 @@
 import type { AnswerResult, AnswerStatus } from '@groundline/core';
-import { quantile, stripAnchor, wilson, type Interval } from './metrics.ts';
+import { distribution, quantile, stripAnchor, wilson, type Distribution, type Interval } from './metrics.ts';
 import { BEHAVIORS, type Category, type EvalQuestion, type ExpectedBehavior } from './schema.ts';
 
-export const STATUSES: readonly AnswerStatus[] = ['answered', 'insufficient', 'handoff', 'declined'];
+export const STATUSES: readonly AnswerStatus[] = ['answered', 'insufficient', 'handoff', 'declined', 'unavailable'];
 
 /** Everything recorded per question in an answers run (and what the judge needs). */
 export interface AnswerRecord {
@@ -33,6 +33,14 @@ export interface AnswerRecord {
   readonly usage: AnswerResult['usage'];
   readonly latency: AnswerResult['latency'];
   readonly cost_usd: number | null;
+  /** S5a fields; absent in S3 records (treated as eval mode, primary model, no hops). */
+  readonly mode?: AnswerResult['mode'];
+  readonly prompt_version?: string;
+  readonly answered_by?: string | null;
+  readonly hops?: number;
+  readonly attempts?: AnswerResult['attempts'];
+  readonly retrieval_fallback?: AnswerResult['retrievalFallback'];
+  readonly articles?: AnswerResult['articles'];
 }
 
 export function toAnswerRecord(question: EvalQuestion, result: AnswerResult): AnswerRecord {
@@ -66,6 +74,13 @@ export function toAnswerRecord(question: EvalQuestion, result: AnswerResult): An
     usage: result.usage,
     latency: result.latency,
     cost_usd: result.costUsd,
+    mode: result.mode,
+    prompt_version: result.promptVersion,
+    answered_by: result.answeredBy,
+    hops: result.hops,
+    attempts: result.attempts,
+    retrieval_fallback: result.retrievalFallback,
+    articles: result.articles,
   };
 }
 
@@ -137,6 +152,23 @@ export interface CodeMetrics {
   readonly queueWaitMs: number;
   readonly tokens: { readonly modelCalls: number; readonly meanPrompt: number; readonly meanOutput: number; readonly meanThoughts: number };
   readonly generationRequests: number;
+  readonly availability: {
+    /** Final status "unavailable" (live mode only in practice). */
+    readonly unavailable: Proportion;
+    /** Validated answers per model that produced them. */
+    readonly answeredBy: Record<string, number>;
+    /** Hops (model switches) per question that called a model. */
+    readonly hops: Record<string, number>;
+    /** HTTP attempts per model and status ("local" for skipped models). */
+    readonly attemptsByModel: Record<string, Record<string, number>>;
+    readonly retrievalFallback: Record<string, number>;
+  };
+  readonly quoteWords: {
+    readonly all: Distribution | null;
+    readonly valid: Distribution | null;
+    readonly over40: number;
+    readonly over80: number;
+  };
   readonly costUsd: { readonly meanPerConversation: number | null; readonly total: number | null };
 }
 
@@ -148,7 +180,7 @@ export function computeCodeMetrics(records: readonly AnswerRecord[]): CodeMetric
   for (const b of BEHAVIORS) {
     const group = records.filter((r) => r.expected_behavior === b);
     byExpected[b] = proportion(group.filter(behaviorCorrect).length, group.length);
-    confusion[b] = { answered: 0, insufficient: 0, handoff: 0, declined: 0 };
+    confusion[b] = { answered: 0, insufficient: 0, handoff: 0, declined: 0, unavailable: 0 };
     for (const r of group) confusion[b][r.status]++;
   }
 
@@ -199,6 +231,8 @@ export function computeCodeMetrics(records: readonly AnswerRecord[]): CodeMetric
       meanThoughts: mean(called.map((r) => r.usage.thoughtsTokens)),
     },
     generationRequests: records.reduce((sum, r) => sum + r.usage.generationRequests, 0),
+    availability: availabilityMetrics(records),
+    quoteWords: quoteWordMetrics(records),
     costUsd: allPriced
       ? { meanPerConversation: mean(costs), total: costs.reduce((a, b) => a + b, 0) }
       : { meanPerConversation: null, total: null },
@@ -504,7 +538,53 @@ export function codeMetricsMarkdown(m: CodeMetrics): string {
     `- Floor hits by expected behavior: ${JSON.stringify(m.floorHits)}.`,
     `- Latency (excl. queue wait) all: p50 ${(m.latencyMs.all.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.all.p95 / 1000).toFixed(2)} s, max ${(m.latencyMs.all.max / 1000).toFixed(2)} s; model calls only: p50 ${(m.latencyMs.modelCalls.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.modelCalls.p95 / 1000).toFixed(2)} s; model calls without retries (n=${m.latencyMs.firstAttempt.n}): p95 ${(m.latencyMs.firstAttempt.p95 / 1000).toFixed(2)} s. Answers that needed retries: ${m.retriedAnswers}. Queue wait total ${(m.queueWaitMs / 1000).toFixed(1)} s.`,
     `- Tokens per model call (mean): prompt ${m.tokens.meanPrompt.toFixed(0)}, output ${m.tokens.meanOutput.toFixed(0)}, thoughts ${m.tokens.meanThoughts.toFixed(0)}.`,
+    `- Availability: unavailable ${ci(m.availability.unavailable)}; answered by ${JSON.stringify(m.availability.answeredBy)}; hops ${JSON.stringify(m.availability.hops)}; attempts by model/status ${JSON.stringify(m.availability.attemptsByModel)}; retrieval fallback ${JSON.stringify(m.availability.retrievalFallback)}.`,
+    `- Quote words: all ${fmtDist(m.quoteWords.all)}; valid ${fmtDist(m.quoteWords.valid)}; >40 words: ${m.quoteWords.over40}, >80 words: ${m.quoteWords.over80}.`,
     `- Equivalent cost at list price: ${m.costUsd.meanPerConversation === null ? 'n/a' : `$${m.costUsd.meanPerConversation.toFixed(6)} per conversation, $${(m.costUsd.total ?? 0).toFixed(4)} total`} (free tier: $0).`,
   ];
   return `${lines.join('\n')}\n\n### Expected behavior × status\n\n${confusionMarkdown(m.confusion)}`;
+}
+
+const words = (text: string): number => text.split(/\s+/).filter((w) => w.length > 0).length;
+const bump = (map: Record<string, number>, key: string): void => {
+  map[key] = (map[key] ?? 0) + 1;
+};
+
+function availabilityMetrics(records: readonly AnswerRecord[]): CodeMetrics['availability'] {
+  const answeredBy: Record<string, number> = {};
+  const hops: Record<string, number> = {};
+  const attemptsByModel: Record<string, Record<string, number>> = {};
+  const retrievalFallback: Record<string, number> = {};
+  for (const r of records) {
+    bump(retrievalFallback, r.retrieval_fallback ?? 'vector');
+    if (r.usage.generationRequests === 0 && (r.attempts ?? []).length === 0) continue;
+    if (r.answered_by) bump(answeredBy, r.answered_by);
+    bump(hops, String(r.hops ?? 0));
+    for (const a of r.attempts ?? []) {
+      const byStatus = (attemptsByModel[a.model] ??= {});
+      bump(byStatus, a.status === null ? `local:${a.outcome}` : String(a.status));
+    }
+  }
+  return {
+    unavailable: proportion(records.filter((r) => r.status === 'unavailable').length, records.length),
+    answeredBy,
+    hops,
+    attemptsByModel,
+    retrievalFallback,
+  };
+}
+
+function quoteWordMetrics(records: readonly AnswerRecord[]): CodeMetrics['quoteWords'] {
+  const valid = records.flatMap((r) => r.citations.map((c) => words(c.quote)));
+  const all = [...valid, ...records.flatMap((r) => r.invalid_citations.map((c) => words(c.quote)))];
+  return {
+    all: all.length > 0 ? distribution(all) : null,
+    valid: valid.length > 0 ? distribution(valid) : null,
+    over40: all.filter((n) => n > 40).length,
+    over80: all.filter((n) => n > 80).length,
+  };
+}
+
+function fmtDist(d: Distribution | null): string {
+  return d ? `min ${d.min} / p25 ${d.p25} / median ${d.median} / p75 ${d.p75} / max ${d.max} (n=${d.n})` : 'n/a';
 }

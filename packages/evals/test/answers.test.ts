@@ -118,8 +118,8 @@ describe('computeCodeMetrics', () => {
     expect(m.behavior.overall).toMatchObject({ hits: 3, n: 4 });
     expect(m.behavior.byExpected.answer).toMatchObject({ hits: 1, n: 2 });
     expect(m.behavior.overall.lo).toBeLessThan(0.75);
-    expect(m.confusion.answer).toEqual({ answered: 1, insufficient: 1, handoff: 0, declined: 0 });
-    expect(m.confusion.decline).toEqual({ answered: 0, insufficient: 0, handoff: 0, declined: 0 });
+    expect(m.confusion.answer).toEqual({ answered: 1, insufficient: 1, handoff: 0, declined: 0, unavailable: 0 });
+    expect(m.confusion.decline).toEqual({ answered: 0, insufficient: 0, handoff: 0, declined: 0, unavailable: 0 });
   });
 
   it('computes citation precision, quote verification, removals and floor hits', () => {
@@ -147,6 +147,47 @@ describe('computeCodeMetrics', () => {
     expect(m.tokens).toMatchObject({ modelCalls: 3, meanPrompt: 2000 });
     expect(m.generationRequests).toBe(3);
     expect(m.costUsd.total).toBeCloseTo(0.003001, 9);
+  });
+});
+
+describe('availability and quote-length metrics', () => {
+  it('counts unavailable, answering models, hops, attempts and fallbacks; tolerates S3 records', () => {
+    const m = computeCodeMetrics([
+      record('l1', 'answer', 'answered', {
+        mode: 'live',
+        answered_by: 'm2',
+        hops: 1,
+        attempts: [
+          { model: 'm1', status: 503, outcome: 'http_error', ms: 300 },
+          { model: 'm2', status: 200, outcome: 'ok', ms: 900 },
+        ],
+        retrieval_fallback: 'vector',
+        citations: [cite('https://x.test/docs/a#s1')],
+        invalid_citations: [{ marker: 2, source_id: 'S1', quote: Array.from({ length: 90 }, () => 'w').join(' '), reason: 'quote_too_long' }],
+      }),
+      record('l2', 'answer', 'unavailable', {
+        mode: 'live',
+        answered_by: null,
+        hops: 1,
+        attempts: [
+          { model: 'm1', status: null, outcome: 'quota_local', ms: 0 },
+          { model: 'm2', status: 0, outcome: 'timeout', ms: 7000 },
+        ],
+        retrieval_fallback: 'vector',
+      }),
+      record('l3', 'abstain', 'unavailable', { usage: { generationRequests: 0, promptTokens: 0, outputTokens: 0, thoughtsTokens: 0, embeddingTokens: 3 }, retrieval_fallback: 'fts', attempts: [] }),
+      record('s3', 'answer', 'answered'),
+    ]);
+    expect(m.availability.unavailable).toMatchObject({ hits: 2, n: 4 });
+    expect(m.availability.answeredBy).toEqual({ m2: 1 });
+    expect(m.availability.hops).toEqual({ '0': 1, '1': 2 });
+    expect(m.availability.attemptsByModel).toEqual({ m1: { '503': 1, 'local:quota_local': 1 }, m2: { '200': 1, '0': 1 } });
+    expect(m.availability.retrievalFallback).toEqual({ vector: 3, fts: 1 });
+    expect(m.confusion.answer.unavailable).toBe(1);
+    expect(m.behavior.byExpected.abstain).toMatchObject({ hits: 0, n: 1 });
+    expect(m.quoteWords.all).toMatchObject({ n: 2, min: 1, max: 90 });
+    expect(m.quoteWords.valid).toMatchObject({ n: 1 });
+    expect(m.quoteWords).toMatchObject({ over40: 1, over80: 1 });
   });
 });
 
