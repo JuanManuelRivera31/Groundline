@@ -38,7 +38,7 @@ describe('parseConfig', () => {
       schemaField: 'responseJsonSchema',
       limits: { rpm: 10, tpm: 100_000, rpd: 200 },
     });
-    expect(config.answer).toEqual({ candidates: 20, sources: 6, floor: 0.6, retrievalMode: 'vector', promptVersion: 'v2' });
+    expect(config.answer).toEqual({ candidates: 20, sources: 6, floor: 0.6, retrievalMode: 'vector', promptVersion: 'v3' });
     expect(generationLimitDefaults(config)).toEqual(['GEN_RPM', 'GEN_TPM', 'GEN_RPD']);
     expect(generationLimitDefaults(parseConfig({ GEN_RPM: '5', GEN_TPM: '1000', GEN_RPD: '50' }))).toEqual([]);
   });

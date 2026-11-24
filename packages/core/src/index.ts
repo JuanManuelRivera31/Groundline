@@ -31,4 +31,5 @@ export * from './answer/validate.ts';
 export * from './answer/policy.ts';
 export * from './answer/engine.ts';
 export * from './answer/prompts/v2.ts';
+export * from './answer/prompts/v3.ts';
 export * from './answer/prompts/index.ts';

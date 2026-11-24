@@ -2,6 +2,7 @@ import { answerResponseSchema, sourceMarkerResponseSchema, type MarkerStyle } fr
 import type { AnswerSource } from '../types.ts';
 import { buildUserContentV1, PROMPT_VERSION, SYSTEM_INSTRUCTION_V1 } from './v1.ts';
 import { buildUserContentV2, PROMPT_VERSION_V2, SYSTEM_INSTRUCTION_V2 } from './v2.ts';
+import { buildUserContentV3, PROMPT_VERSION_V3, SYSTEM_INSTRUCTION_V3 } from './v3.ts';
 
 export interface PromptSpec {
   readonly version: string;
@@ -10,6 +11,8 @@ export interface PromptSpec {
   /** numeric: [1] markers with citation.marker (v1). source: [S1] markers, citations without marker (v2). */
   readonly markerStyle: MarkerStyle;
   responseSchema(sourceIds: readonly string[]): Record<string, unknown>;
+  /** Validate fenced code blocks as verbatim source excerpts (v3+). */
+  readonly codeBlocks: boolean;
 }
 
 /** Versioned prompts. Recorded runs name the version they used. */
@@ -20,6 +23,7 @@ export const PROMPTS: Readonly<Record<string, PromptSpec>> = {
     buildUserContent: buildUserContentV1,
     markerStyle: 'numeric',
     responseSchema: answerResponseSchema,
+    codeBlocks: false,
   },
   [PROMPT_VERSION_V2]: {
     version: PROMPT_VERSION_V2,
@@ -27,10 +31,19 @@ export const PROMPTS: Readonly<Record<string, PromptSpec>> = {
     buildUserContent: buildUserContentV2,
     markerStyle: 'source',
     responseSchema: sourceMarkerResponseSchema,
+    codeBlocks: false,
+  },
+  [PROMPT_VERSION_V3]: {
+    version: PROMPT_VERSION_V3,
+    system: SYSTEM_INSTRUCTION_V3,
+    buildUserContent: buildUserContentV3,
+    markerStyle: 'source',
+    responseSchema: sourceMarkerResponseSchema,
+    codeBlocks: true,
   },
 };
 
-export const DEFAULT_PROMPT_VERSION = PROMPT_VERSION_V2;
+export const DEFAULT_PROMPT_VERSION = PROMPT_VERSION_V3;
 
 export function getPrompt(version: string): PromptSpec {
   const prompt = PROMPTS[version];

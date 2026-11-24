@@ -106,8 +106,8 @@ const overloaded = (): GenerationApiError => new GenerationApiError('HTTP 503 UN
 const live = (s: Setup): AnswerEngineDeps => ({ ...s.deps, mode: 'live' });
 
 describe('prompt registry and v2', () => {
-  it('keeps v1 intact and defaults to v2', () => {
-    expect(Object.keys(PROMPTS)).toEqual(['v1', 'v2']);
+  it('keeps v1 and v2 intact and defaults to v3', () => {
+    expect(Object.keys(PROMPTS)).toEqual(['v1', 'v2', 'v3']);
     expect(getPrompt('v1').system).toBe(SYSTEM_INSTRUCTION_V1);
     expect(getPrompt('v2').system).toBe(SYSTEM_INSTRUCTION_V2);
     expect(() => getPrompt('v9')).toThrow(/Unknown prompt version/);
@@ -170,10 +170,10 @@ describe('answerQuestion — eval mode', () => {
     expect(s.usage).toHaveLength(0);
   });
 
-  it('answers with verified citations, defaults to prompt v2 and records real usage', async () => {
+  it('answers with verified citations, defaults to prompt v3 and records real usage', async () => {
     const s = setup((t) => [client('gemini-3.5-flash-lite', t, [{ text: reply() }])]);
     const result = await answerQuestion(s.deps, 'how long is the trial');
-    expect(result).toMatchObject({ status: 'answered', mode: 'eval', answeredBy: 'gemini-3.5-flash-lite', hops: 0, error: null, promptVersion: 'v2' });
+    expect(result).toMatchObject({ status: 'answered', mode: 'eval', answeredBy: 'gemini-3.5-flash-lite', hops: 0, error: null, promptVersion: 'v3' });
     expect(result.citations[0]).toMatchObject({ marker: 1, url: 'https://x.test/docs/trial' });
     expect(result.usage).toMatchObject({ generationRequests: 1, promptTokens: 1000, outputTokens: 100 });
     expect(result.costUsd).toBeGreaterThan(0);

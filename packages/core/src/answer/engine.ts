@@ -213,7 +213,7 @@ export async function answerQuestion(deps: AnswerEngineDeps, question: string): 
     if (parsed?.ok) {
       modelStatus = parsed.value.status;
       modelCitations = parsed.value.citations;
-      outcome = applyPolicy(question, parsed.value, sources, config.quoteBounds);
+      outcome = applyPolicy(question, parsed.value, sources, config.quoteBounds, prompt.codeBlocks);
     } else {
       outcome = fallbackOutcome(question, `invalid_output: ${parsed ? parsed.error : `finishReason ${run.result.finishReason}`}`);
     }
