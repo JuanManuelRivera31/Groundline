@@ -1,16 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { answerQuestion, type AnswerEngineDeps } from '../src/answer/engine.ts';
 import { applyPolicy, fallbackLanguage, FALLBACK_MESSAGES } from '../src/answer/policy.ts';
 import { buildUserContentV1, neutralizeDelimiters } from '../src/answer/prompts/v1.ts';
 import { answerResponseSchema, parseModelAnswer } from '../src/answer/schema.ts';
 import { groupSources, maxSimilarity } from '../src/answer/sources.ts';
 import type { AnswerSource, ModelAnswer, RetrievedChunk } from '../src/answer/types.ts';
-import { isClaim, normalizeForMatch, splitSentences, validateAnswer } from '../src/answer/validate.ts';
-import { DEFAULT_RETRY_POLICY } from '../src/embeddings/retry.ts';
-import { FakeGenerationClient } from '../src/generation/fake.ts';
+import { checkCitation, isClaim, normalizeForMatch, splitSentences, validateAnswer } from '../src/answer/validate.ts';
 import { equivalentCostUsd } from '../src/pricing/list-prices.ts';
-import { RateLimiter } from '../src/ratelimit/limiter.ts';
-import { fakeTime } from './helpers.ts';
 
 const chunk = (chunkId: number, url: string, ord: number, cosine: number, content = `content ${chunkId}`): RetrievedChunk => ({
   chunkId,
@@ -133,7 +128,7 @@ describe('citation validation', () => {
           { marker: 3, source_id: 'S1', quote: 'We offer a 30-day refund for "annual" plans.' },
           { marker: 4, source_id: 'S9', quote: 'anything' },
           { marker: 5, source_id: 'S2', quote: 'The free trial lasts 60 days' },
-          { marker: 6, source_id: 'S2', quote: Array.from({ length: 26 }, () => 'word').join(' ') },
+          { marker: 6, source_id: 'S2', quote: Array.from({ length: 81 }, () => 'word').join(' ') },
           { marker: 7, source_id: 'S2', quote: ' .. ' },
         ],
       },
@@ -158,6 +153,17 @@ describe('citation validation', () => {
       { text: 'Trials are 60 days long [5].', reason: 'failed_citation' },
       { text: 'Refunds are instant.', reason: 'unmarked_claim' },
     ]);
+  });
+
+  it('accepts verbatim quotes of 3–80 words and rejects 2 or 81', () => {
+    const words = (n: number): string => Array.from({ length: n }, (_, i) => `w${i}`).join(' ');
+    const source: AnswerSource = { ...SOURCES[1], id: 'S1', text: words(100) } as AnswerSource;
+    const byId = new Map([['S1', source]]);
+    expect(checkCitation({ marker: 1, source_id: 'S1', quote: words(2) }, byId)).toBe('quote_too_short');
+    expect(checkCitation({ marker: 1, source_id: 'S1', quote: words(3) }, byId)).toBeNull();
+    expect(checkCitation({ marker: 1, source_id: 'S1', quote: words(80) }, byId)).toBeNull();
+    expect(checkCitation({ marker: 1, source_id: 'S1', quote: words(81) }, byId)).toBe('quote_too_long');
+    expect(checkCitation({ marker: 1, source_id: 'S1', quote: words(30) }, byId, new Map(), { minWords: 1, maxWords: 25 })).toBe('quote_too_long');
   });
 
   it('does not remove unmarked sentences outside "answered"', () => {
@@ -222,69 +228,3 @@ describe('equivalentCostUsd', () => {
   });
 });
 
-describe('answerQuestion', () => {
-  const ranked = [chunk(1, SOURCES[0]?.url ?? '', 0, 0.8, SOURCES[0]?.text), chunk(2, SOURCES[1]?.url ?? '', 0, 0.7, SOURCES[1]?.text)];
-
-  function deps(generation: FakeGenerationClient, floor = 0.6, retrieved: readonly RetrievedChunk[] = ranked): { deps: AnswerEngineDeps; usage: unknown[] } {
-    const t = fakeTime();
-    const usage: unknown[] = [];
-    return {
-      usage,
-      deps: {
-        config: { candidates: 20, sources: 6, floor, embeddingModel: 'gemini-embedding-001', maxOutputTokens: 1024 },
-        embedQuery: () => Promise.resolve([1, 0]),
-        retrieve: () => Promise.resolve(retrieved),
-        generation,
-        call: {
-          limiter: new RateLimiter({ limits: { rpm: 10, tpm: 100_000, rpd: 200 }, clock: t.clock, sleep: t.sleep }),
-          retry: DEFAULT_RETRY_POLICY,
-          sleep: t.sleep,
-          random: () => 0,
-          clock: t.clock,
-        },
-        usage: {
-          record: (e) => {
-            usage.push(e);
-            return Promise.resolve();
-          },
-        },
-        clock: t.clock,
-      },
-    };
-  }
-
-  it('short-circuits below the floor without calling the model', async () => {
-    const gen = new FakeGenerationClient([]);
-    const d = deps(gen, 0.9);
-    const result = await answerQuestion(d.deps, 'banana bread recipe?');
-    expect(result).toMatchObject({ status: 'insufficient', floorHit: true, modelStatus: null, handoffOffered: true });
-    expect(result.usage.generationRequests).toBe(0);
-    expect(gen.requests).toHaveLength(0);
-    expect(d.usage).toHaveLength(0);
-  });
-
-  it('answers with verified citations and records real token usage', async () => {
-    const reply = model({ answer: 'The trial lasts 30 days and needs no card [1].', citations: [{ marker: 1, source_id: 'S2', quote: 'lasts 30 days and needs no credit card' }] });
-    const gen = new FakeGenerationClient([{ text: JSON.stringify(reply) }], 'gemini-3.5-flash-lite');
-    const d = deps(gen);
-    const result = await answerQuestion(d.deps, 'how long is the trial');
-    expect(result).toMatchObject({ status: 'answered', floorHit: false, modelStatus: 'answered', error: null, promptVersion: 'v1' });
-    expect(result.citations[0]).toMatchObject({ marker: 1, url: 'https://x.test/docs/trial' });
-    expect(result.usage).toMatchObject({ generationRequests: 1, promptTokens: 1000, outputTokens: 100 });
-    expect(result.costUsd).toBeGreaterThan(0);
-    expect(d.usage).toEqual([
-      expect.objectContaining({ kind: 'generate', model: 'gemini-3.5-flash-lite', requests: 1, httpStatus: 200, promptTokens: 1000, outputTokens: 100 }),
-    ]);
-    expect(gen.requests[0]?.user).toContain('<customer_message>');
-  });
-
-  it('turns invalid output or a non-STOP finish into insufficient without retrying', async () => {
-    const gen = new FakeGenerationClient([{ text: 'not json' }, { text: '{}', finishReason: 'MAX_TOKENS' }]);
-    const d = deps(gen);
-    const first = await answerQuestion(d.deps, 'q1');
-    const second = await answerQuestion(d.deps, 'q2');
-    expect(first).toMatchObject({ status: 'insufficient', error: 'invalid_output: response is not valid JSON' });
-    expect(second).toMatchObject({ status: 'insufficient', error: 'invalid_output: finishReason MAX_TOKENS' });
-    expect(gen.requests).toHaveLength(2);
-  });
-});

@@ -8,7 +8,16 @@ import type {
   VerifiedCitation,
 } from './types.ts';
 
-export const MAX_QUOTE_WORDS = 25;
+/** Quote length bounds in words (S5a: 3–80; S3 used a 25-word cap that rejected verbatim quotes). */
+export const MIN_QUOTE_WORDS = 3;
+export const MAX_QUOTE_WORDS = 80;
+
+export interface QuoteBounds {
+  readonly minWords: number;
+  readonly maxWords: number;
+}
+
+export const DEFAULT_QUOTE_BOUNDS: QuoteBounds = { minWords: MIN_QUOTE_WORDS, maxWords: MAX_QUOTE_WORDS };
 
 /**
  * Normalization for quote matching: Unicode NFKC, typographic quotes and
@@ -40,12 +49,15 @@ export function checkCitation(
   citation: ModelCitation,
   sources: ReadonlyMap<string, AnswerSource>,
   normalizedSources = new Map<string, string>(),
+  bounds: QuoteBounds = DEFAULT_QUOTE_BOUNDS,
 ): InvalidCitationReason | null {
   const source = sources.get(citation.source_id);
   if (!source) return 'unknown_source';
   const quote = normalizeForMatch(citation.quote).replace(EDGE_PUNCTUATION, '');
   if (quote.length === 0) return 'empty_quote';
-  if (wordCount(citation.quote) > MAX_QUOTE_WORDS) return 'quote_too_long';
+  const words = wordCount(citation.quote);
+  if (words > bounds.maxWords) return 'quote_too_long';
+  if (words < bounds.minWords) return 'quote_too_short';
   let haystack = normalizedSources.get(source.id);
   if (haystack === undefined) {
     haystack = normalizeForMatch(source.text);
@@ -135,14 +147,14 @@ export interface ValidationOutcome {
 export function validateAnswer(
   model: Pick<ModelAnswer, 'answer' | 'citations'>,
   sources: readonly AnswerSource[],
-  options: { readonly requireMarkers: boolean },
+  options: { readonly requireMarkers: boolean; readonly bounds?: QuoteBounds | undefined },
 ): ValidationOutcome {
   const byId = new Map(sources.map((s) => [s.id, s]));
   const normalized = new Map<string, string>();
   const invalidCitations: InvalidCitation[] = [];
   const validByMarker = new Map<number, ModelCitation[]>();
   for (const citation of model.citations) {
-    const reason = checkCitation(citation, byId, normalized);
+    const reason = checkCitation(citation, byId, normalized, options.bounds);
     if (reason) {
       invalidCitations.push({ ...citation, reason });
     } else {
