@@ -22,7 +22,7 @@ import { parseJsonl, toJsonl, type EvalQuestion } from '../schema.ts';
 
 const SAMPLE_SEED = 20261123;
 
-const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--prompt v2] [--live] [--sample N] [--dry-run] [--batch-size 10] [--max-requests N] [--resume <run>.partial.jsonl] | --set dev --external answers.csv [--label name]';
+const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--prompt v3] [--model <eval primary>] [--live] [--sample N] [--dry-run] [--batch-size 10] [--max-requests N] [--resume <run>.partial.jsonl] | --set dev --external answers.csv [--label name]';
 
 async function freeBase(base: string): Promise<string> {
   let candidate = base;
@@ -107,6 +107,7 @@ async function main(): Promise<void> {
       live: { type: 'boolean', default: false },
       sample: { type: 'string' },
       prompt: { type: 'string' },
+      model: { type: 'string' },
       resume: { type: 'string' },
       help: { type: 'boolean' },
     },
@@ -147,7 +148,7 @@ async function main(): Promise<void> {
   }
   const db = new PgDb(config.databaseUrl);
   try {
-    const runtime = await createAnswerRuntime(config, db, { embedKind: 'embed_query_eval', mode, promptVersion: values.prompt });
+    const runtime = await createAnswerRuntime(config, db, { embedKind: 'embed_query_eval', mode, promptVersion: values.prompt, primaryModel: values.model });
     const { deps } = runtime;
 
     // Checkpoint: every record is appended to <base>.partial.jsonl as soon as it exists,

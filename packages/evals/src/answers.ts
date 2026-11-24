@@ -347,7 +347,8 @@ export const TARGETS = {
   idkCorrect: { min: 0.9, label: 'Correct "I don\'t know" on abstain questions' },
   correctAnswers: { min: 0.85, label: 'Correct answers on answer questions' },
   citationsCorrect: { min: 0.9, label: 'Citations to the correct source (document level)' },
-  latencyP95Ms: { max: 8000, label: 'Latency p95' },
+  latencyP95Ms: { max: 8000, label: 'Latency p95 (live mode)' },
+  modelLatencyP95Ms: { label: 'Model latency p95 (eval mode, no retries; informational)' },
 } as const;
 
 export interface TargetRow {
@@ -355,7 +356,14 @@ export interface TargetRow {
   readonly label: string;
   readonly value: Proportion | number;
   readonly target: string;
-  readonly met: boolean;
+  /** null for informational rows (no target). */
+  readonly met: boolean | null;
+}
+
+/** Live-mode latency input for the latency target (ADR-0010: the target is measured in live mode). */
+export interface LiveLatency {
+  readonly p95Ms: number;
+  readonly n: number;
 }
 
 export interface AggregateMetrics {
@@ -379,6 +387,7 @@ export function aggregate(
   items: readonly JudgeItem[],
   judgments: readonly Judgment[],
   code: Pick<CodeMetrics, 'citations' | 'latencyMs'> | null,
+  live: LiveLatency | null = null,
 ): AggregateMetrics {
   const byId = new Map(judgments.map((j) => [j.id, j]));
   const rows = items.map((item) => ({ item, j: byId.get(item.id), status: effectiveStatus(item, byId.get(item.id)) }));
@@ -422,13 +431,22 @@ export function aggregate(
         met: code.citations.documentPrecision.n > 0 && code.citations.documentPrecision.value >= TARGETS.citationsCorrect.min,
       },
       {
-        key: 'latencyP95Ms',
-        label: TARGETS.latencyP95Ms.label,
-        value: code.latencyMs.all.p95,
-        target: '≤ 8 s',
-        met: code.latencyMs.all.p95 <= TARGETS.latencyP95Ms.max,
+        key: 'modelLatencyP95Ms',
+        label: TARGETS.modelLatencyP95Ms.label,
+        value: code.latencyMs.firstAttempt.p95,
+        target: '—',
+        met: null,
       },
     );
+  }
+  if (live) {
+    targets.push({
+      key: 'latencyP95Ms',
+      label: `${TARGETS.latencyP95Ms.label}, n=${live.n}`,
+      value: live.p95Ms,
+      target: '≤ 8 s',
+      met: live.p95Ms <= TARGETS.latencyP95Ms.max,
+    });
   }
 
   const appropriateByExpected = {} as Record<ExpectedBehavior, Proportion>;
@@ -521,7 +539,7 @@ export function targetsMarkdown(targets: readonly TargetRow[]): string {
   const lines = ['| Metric | Value [Wilson 95%] | Target | Met |', '| --- | --- | --- | --- |'];
   for (const t of targets) {
     const value = typeof t.value === 'number' ? `${(t.value / 1000).toFixed(2)} s` : ci(t.value);
-    lines.push(`| ${t.label} | ${value} | ${t.target} | ${t.met ? 'yes' : 'no'} |`);
+    lines.push(`| ${t.label} | ${value} | ${t.target} | ${t.met === null ? '—' : t.met ? 'yes' : 'no'} |`);
   }
   return `${lines.join('\n')}\n`;
 }

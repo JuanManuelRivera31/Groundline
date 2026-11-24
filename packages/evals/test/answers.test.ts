@@ -232,14 +232,18 @@ describe('judgments and aggregate', () => {
 
   it('computes the target metrics', () => {
     const { judgments } = validateJudgments(items, good);
-    const result = aggregate(items, judgments, computeCodeMetrics(records));
+    const result = aggregate(items, judgments, computeCodeMetrics(records), { p95Ms: 9100, n: 12 });
     const byKey = Object.fromEntries(result.targets.map((t) => [t.key, t]));
     expect(byKey.fabricated?.value).toMatchObject({ hits: 2, n: 3 });
     expect(byKey.fabricated?.met).toBe(false);
     expect(byKey.idkCorrect?.value).toMatchObject({ hits: 1, n: 2 });
     expect(byKey.correctAnswers?.value).toMatchObject({ hits: 1, n: 2 });
     expect(byKey.citationsCorrect?.value).toMatchObject({ hits: 1, n: 2 });
-    expect(byKey.latencyP95Ms).toMatchObject({ value: 1000, met: true });
+    // Latency target comes from the live run; eval latency without retries is informational.
+    expect(byKey.latencyP95Ms).toMatchObject({ value: 9100, met: false });
+    expect(byKey.modelLatencyP95Ms).toMatchObject({ value: 1000, met: null, target: '—' });
+    const noLive = aggregate(items, judgments, computeCodeMetrics(records));
+    expect(noLive.targets.map((t) => t.key)).not.toContain('latencyP95Ms');
     expect(result.judge.completeMean).toBe(1);
     expect(result.judge.appropriateOnNonAnswered).toMatchObject({ hits: 1, n: 1 });
   });

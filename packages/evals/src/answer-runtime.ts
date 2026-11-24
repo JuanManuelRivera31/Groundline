@@ -73,13 +73,19 @@ export function createGenerationClient(config: AppConfig, model: string = config
 export async function createAnswerRuntime(
   config: AppConfig,
   db: Db,
-  options: { readonly embedKind: string; readonly mode?: AnswerMode | undefined; readonly promptVersion?: string | undefined },
+  options: {
+    readonly embedKind: string;
+    readonly mode?: AnswerMode | undefined;
+    readonly promptVersion?: string | undefined;
+    /** Eval mode: measure this model instead of the chain's primary. */
+    readonly primaryModel?: string | undefined;
+  },
 ): Promise<AnswerRuntime> {
   const emb = config.embedding;
   const gen = config.generation;
   const mode: AnswerMode = options.mode ?? 'eval';
   const embeddingQuota = await quotaToday(db, emb.model, emb.limits.rpd);
-  const models = mode === 'eval' ? [gen.model] : gen.models;
+  const models = mode === 'eval' ? [options.primaryModel ?? gen.model] : gen.models;
   const generationQuotas: QuotaStatus[] = [];
   for (const m of models) generationQuotas.push(await quotaToday(db, m, (gen.limitsByModel[m] ?? gen.limits).rpd));
   const cache = cacheStoreFor(db);

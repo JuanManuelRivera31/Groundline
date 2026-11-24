@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { parseArgs } from 'node:util';
 import {
   aggregate,
   ci,
@@ -12,11 +13,12 @@ import {
   validateJudgments,
   type AnswerRecord,
   type JudgeItem,
+  type LiveLatency,
 } from '../answers.ts';
 import { errorMessage } from '../io.ts';
 import { parseJsonl } from '../schema.ts';
 
-const USAGE = 'Usage: pnpm eval:aggregate evals/runs/<date>-answers[-label].json';
+const USAGE = 'Usage: pnpm eval:aggregate evals/runs/<date>-answers[-label].json [--live evals/runs/<date>-answers-<label>-live.json]';
 
 interface RunFile {
   kind: 'answers' | 'external';
@@ -28,10 +30,11 @@ interface RunFile {
 }
 
 async function main(): Promise<void> {
-  const arg = process.argv[2];
-  if (!arg || arg === '--help') {
+  const { values, positionals } = parseArgs({ options: { live: { type: 'string' }, help: { type: 'boolean' } }, allowPositionals: true, strict: true });
+  const arg = positionals[0];
+  if (!arg || values.help) {
     console.log(USAGE);
-    process.exitCode = arg ? 0 : 1;
+    process.exitCode = values.help ? 0 : 1;
     return;
   }
   const runPath = resolve(arg);
@@ -48,10 +51,16 @@ async function main(): Promise<void> {
   if (errors.length > 0) throw new Error(`Invalid judgments:\n- ${errors.join('\n- ')}`);
 
   const code = run.kind === 'answers' ? computeCodeMetrics(run.records ?? []) : null;
-  const metrics = aggregate(items, judgments, code);
+  let live: LiveLatency | null = null;
+  if (values.live) {
+    const liveRun = JSON.parse(await readFile(resolve(values.live), 'utf8')) as { mode?: string; metrics: { latencyMs: { all: { p95: number; n: number } } } };
+    if (liveRun.mode !== 'live') throw new Error(`${values.live} is not a live-mode run.`);
+    live = { p95Ms: liveRun.metrics.latencyMs.all.p95, n: liveRun.metrics.latencyMs.all.n };
+  }
+  const metrics = aggregate(items, judgments, code, live);
   const judgeModels = [...new Set(judgments.map((j) => j.judge_model))];
 
-  await writeFile(`${base}-aggregate.json`, `${JSON.stringify({ run: arg, judgeModels, code, ...metrics }, null, 2)}\n`, 'utf8');
+  await writeFile(`${base}-aggregate.json`, `${JSON.stringify({ run: arg, live: values.live ?? null, judgeModels, code, ...metrics }, null, 2)}\n`, 'utf8');
   const j = metrics.judge;
   const md = [
     `# Aggregate: ${arg.replace(/\\/g, '/')}`,
@@ -73,7 +82,7 @@ async function main(): Promise<void> {
 
   for (const t of metrics.targets) {
     const value = typeof t.value === 'number' ? `${(t.value / 1000).toFixed(2)} s` : `${pct(t.value.value)} [${pct(t.value.lo)}–${pct(t.value.hi)}]`;
-    console.log(`${t.met ? 'MET ' : 'MISS'} ${t.label}: ${value} (target ${t.target})`);
+    console.log(`${t.met === null ? 'INFO' : t.met ? 'MET ' : 'MISS'} ${t.label}: ${value} (target ${t.target})`);
   }
   console.log(`Wrote ${base}-aggregate.json and .md`);
 }
