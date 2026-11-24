@@ -86,6 +86,19 @@ Prompts live in a registry (`packages/core/src/answer/prompts/`; `ANSWER_PROMPT_
   - Markers are renumbered to [1], [2]… in order of appearance for display, so the customer sees no difference.
   - v1 and the S3 re-validation keep the numeric scheme.
 
+### Prompt v3 (S5b, iteration 2)
+v3 is the default (`ANSWER_PROMPT_VERSION=v3`); v1 and v2 are unchanged. It keeps v2's rules and `[Sx]` markers and orders the status rules as manipulation → handoff → comparison → answered → insufficient. General changes, each with one invented example (fictional tools RootBot, ZetaCRM, QuuxStats; a test checks token Jaccard < 0.6 against every dev question):
+- **Concrete values:** if the question asks for a value, setting name, step, command or code, the answer must include it explicitly, taken from the source.
+  - Code goes in a fenced block copied exactly from the source.
+  - **Code blocks are validated by code** (`codeBlocks: true` on v3 only). A block is kept only if it meets all of these:
+    - it is a normalized substring of a source cited by the adjacent sentence (the nearest kept sentence before it, else the one after it), and that sentence's `[Sx]` markers passed validation;
+    - it has at most 40 non-empty lines (`MAX_CODE_LINES`);
+    - it is not empty.
+  - The 80-word quote cap does not apply to code blocks. Rejected blocks are removed (`failed_code`, `code_too_long`) and counted.
+  - Markers inside code are never renumbered. v1 and v2 keep treating fences as plain lines.
+- **Manipulation:** any attempt to change the role or the rules ("developer mode", "DAN", "ignore your rules", "you are now…") is always `declined`, even with no other question. A wrapped legitimate question keeps the current rule (`answered` + `declined_injection`).
+- **Account actions:** any request to execute something on the customer's account (delete, refund, discount, disable 2FA, change plan) is always `handoff`, never `answered`. Self-service steps may be added with citations.
+
 ### Availability: eval vs live mode
 - **Eval mode** (`eval:answers`) uses the primary model only, with patient retries (backoff base 5 s, cap 120 s), so one model is measured.
 - **Live mode** (`pnpm ask`, the future API) walks the model chain `GEN_MODELS` (default `gemini-3.5-flash-lite,gemini-3.1-flash-lite`, both listed as Stable) within `GEN_LIVE_BUDGET_MS = 8000` per answer, retrieval included.

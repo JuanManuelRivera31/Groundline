@@ -47,7 +47,12 @@ The kit is also sold as an **audit**: grading another vendor's bot on the same q
 | Correct "I don't know" | abstain questions with status `insufficient` | ≥ 90% |
 | Correct answers | answer questions with status `answered` and judge `correct` / all answer questions | ≥ 85% |
 | Citations to the right source | document-level citation precision | ≥ 90% |
-| Latency | p95 of total latency | ≤ 8 s |
+| Latency | p95 of total latency **in live mode** | ≤ 8 s |
+
+#### Amendment S5b (2026-11-24): where each target is measured
+- **Latency target (p95 ≤ 8 s) is measured in live mode**, which is what the customer experiences: model chain, 8 s budget, `unavailable` fallback (ADR-0009). It comes from a seeded live sample of dev questions (`eval:answers --live --sample N`), passed to `pnpm eval:aggregate <run> --live <live-run.json>`.
+- **Eval mode** retries the primary model patiently, so its latency mostly measures Google's load. It is reported as **"model latency"**: p95 of model calls that needed no retry. It is informational and not compared with the target.
+- **Quality metrics are reported per model.** Each chain model that can answer in live mode (gemini-3.5-flash-lite, gemini-3.1-flash-lite) gets its own eval run as primary (`--model`), with the same judge. The final report states what share of live answers each model gave, so the live quality can be read as a mix of the per-model numbers.
 
 ### External audit mode
 - `pnpm eval:answers --set dev --external answers.csv` takes columns `id,answer`, with answers from another bot to our questions. It makes no API calls.

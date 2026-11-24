@@ -36,8 +36,9 @@ Groundline is a reusable AI support-agent kit. It answers customer questions **o
 | `pnpm eval:answers --set dev [--label x] [--dry-run]` | Answer run on dev (refuses `--set test`); writes the run, code metrics and judge batches to `evals/runs/` |
 | `pnpm eval:answers --set dev --external answers.csv` | Audit another bot's answers (`id,answer`) with the same judge; no API calls |
 | `pnpm eval:revalidate <run.json>` | Re-apply the current validator to a stored answer run (no API); judge batches only for status changes |
-| `pnpm eval:answers --set dev --live --sample 12` | Live-mode sample (model chain + 8 s budget) for latency and availability |
-| `pnpm eval:aggregate <run.json>` | Validate judgments and merge code + judge metrics against the targets |
+| `pnpm eval:answers --set dev --live --sample 30` | Live-mode sample (model chain + 8 s budget) for latency and availability |
+| `pnpm eval:answers --set dev --model gemini-3.1-flash-lite --label v3-31` | Eval run with another chain model as primary (per-model quality) |
+| `pnpm eval:aggregate <run.json> [--live <live-run.json>]` | Validate judgments and merge code + judge metrics against the targets (latency target from the live run) |
 
 Node 26 runs the TypeScript sources directly (type stripping), so there is no compile step for the CLIs.
 
