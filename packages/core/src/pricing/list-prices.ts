@@ -21,6 +21,12 @@ export const LIST_PRICES: Readonly<Record<string, ModelPrice>> = {
     sourceUrl: PRICING_SOURCE_URL,
     verifiedOn: '2026-11-23',
   },
+  'gemini-3.1-flash-lite': {
+    inputPerMillion: 0.25,
+    outputPerMillion: 1.5,
+    sourceUrl: PRICING_SOURCE_URL,
+    verifiedOn: '2026-11-24',
+  },
   'gemini-embedding-001': {
     inputPerMillion: 0.15,
     outputPerMillion: 0,
