@@ -14,8 +14,13 @@ export interface Acquisition {
   readonly tokens: number;
 }
 
+export interface AcquireOptions {
+  /** Live mode: fail with RateLimitWaitError instead of waiting longer than this for the minute window. */
+  readonly maxWaitMs?: number | undefined;
+}
+
 export interface RateLimiterLike {
-  acquire(cost: Acquisition): Promise<void>;
+  acquire(cost: Acquisition, options?: AcquireOptions): Promise<void>;
 }
 
 export interface RateLimiterOptions {
@@ -31,6 +36,11 @@ export interface RateLimiterOptions {
 
 export class QuotaExceededError extends Error {
   override readonly name = 'QuotaExceededError';
+}
+
+/** The minute window would need a longer wait than the caller allows. */
+export class RateLimitWaitError extends Error {
+  override readonly name = 'RateLimitWaitError';
 }
 
 interface Event {
@@ -74,7 +84,8 @@ export class RateLimiter implements RateLimiterLike {
     return Math.max(0, this.#limits.rpd - this.usedToday);
   }
 
-  async acquire(cost: Acquisition): Promise<void> {
+  async acquire(cost: Acquisition, options: AcquireOptions = {}): Promise<void> {
+    let waited = 0;
     const { rpm, tpm, rpd } = this.#limits;
     if (cost.requests > rpm) {
       throw new QuotaExceededError(`A single call of ${cost.requests} requests exceeds the RPM limit (${rpm}).`);
@@ -98,7 +109,11 @@ export class RateLimiter implements RateLimiterLike {
         this.#usedToday += cost.requests;
         return;
       }
+      if (options.maxWaitMs !== undefined && waited + wait > options.maxWaitMs) {
+        throw new RateLimitWaitError(`Rate limit window needs ${wait} ms; only ${Math.max(0, options.maxWaitMs - waited)} ms allowed.`);
+      }
       await this.#sleep(wait);
+      waited += wait;
     }
   }
 

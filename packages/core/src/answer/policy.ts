@@ -1,5 +1,5 @@
-import type { AnswerSource, AnswerStatus, InvalidCitation, ModelAnswer, RemovedSentence, VerifiedCitation } from './types.ts';
-import { validateAnswer } from './validate.ts';
+import type { AnswerSource, AnswerStatus, ArticleLink, InvalidCitation, ModelAnswer, RemovedSentence, VerifiedCitation } from './types.ts';
+import { validateAnswer, type QuoteBounds } from './validate.ts';
 
 const SPANISH_HINT = /[¿¡ñáéíóú]|\b(hola|c[oó]mo|qu[eé]|puedo|quiero|tengo|mi|mis|para|por qu[eé]|cu[aá]nto|d[oó]nde|gracias|necesito)\b/i;
 
@@ -22,6 +22,37 @@ export const FALLBACK_MESSAGES = {
     es: 'No puedo ayudarte con eso, pero con gusto respondo preguntas sobre la documentación del producto.',
   },
 } as const;
+
+export const UNAVAILABLE_MESSAGES = {
+  withArticles: {
+    en: "I can't generate an answer right now. These articles may help:",
+    es: 'Ahora mismo no puedo generar una respuesta. Estos artículos pueden ayudarte:',
+  },
+  withoutArticles: {
+    en: "I can't generate an answer right now. Please try again in a moment, or I can connect you with a person from the support team.",
+    es: 'Ahora mismo no puedo generar una respuesta. Inténtalo de nuevo en un momento, o puedo ponerte en contacto con una persona del equipo de soporte.',
+  },
+} as const;
+
+/** Degradation without AI: fixed message plus article links. Never shows unvalidated model text. */
+export function unavailableOutcome(question: string, articles: readonly ArticleLink[], error: string): PolicyOutcome {
+  const lang = fallbackLanguage(question);
+  const answer =
+    articles.length > 0
+      ? [UNAVAILABLE_MESSAGES.withArticles[lang], ...articles.map((a) => `- ${a.title}: ${a.url}`)].join('\n')
+      : UNAVAILABLE_MESSAGES.withoutArticles[lang];
+  return {
+    status: 'unavailable',
+    declinedInjection: false,
+    answer,
+    citations: [],
+    invalidCitations: [],
+    removedSentences: [],
+    handoffOffered: true,
+    handoffReason: '',
+    error,
+  };
+}
 
 export interface PolicyOutcome {
   readonly status: AnswerStatus;
@@ -56,9 +87,14 @@ export function fallbackOutcome(question: string, error: string | null): PolicyO
  * it becomes "insufficient". Other statuses keep their message; any citations
  * they carry (e.g. self-service steps in a hand-off) are validated the same way.
  */
-export function applyPolicy(question: string, model: ModelAnswer, sources: readonly AnswerSource[]): PolicyOutcome {
+export function applyPolicy(
+  question: string,
+  model: ModelAnswer,
+  sources: readonly AnswerSource[],
+  bounds?: QuoteBounds,
+): PolicyOutcome {
   const answered = model.status === 'answered';
-  const validation = validateAnswer(model, sources, { requireMarkers: answered });
+  const validation = validateAnswer(model, sources, { requireMarkers: answered, bounds });
   const lang = fallbackLanguage(question);
 
   if (answered && !validation.hasSupportedSentence) {

@@ -27,17 +27,36 @@ describe('parseConfig', () => {
 
   it('defaults generation and answer settings and flags missing generation limits', () => {
     const config = parseConfig({});
-    expect(config.generation).toEqual({
+    expect(config.generation).toMatchObject({
       model: 'gemini-3.5-flash-lite',
+      models: ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+      liveBudgetMs: 8000,
+      modelsWithDefaultLimits: ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
       temperature: 0,
       maxOutputTokens: 1024,
       thinkingLevel: 'MINIMAL',
       schemaField: 'responseJsonSchema',
       limits: { rpm: 10, tpm: 100_000, rpd: 200 },
     });
-    expect(config.answer).toEqual({ candidates: 20, sources: 6, floor: 0.6, retrievalMode: 'vector' });
+    expect(config.answer).toEqual({ candidates: 20, sources: 6, floor: 0.6, retrievalMode: 'vector', promptVersion: 'v2' });
     expect(generationLimitDefaults(config)).toEqual(['GEN_RPM', 'GEN_TPM', 'GEN_RPD']);
     expect(generationLimitDefaults(parseConfig({ GEN_RPM: '5', GEN_TPM: '1000', GEN_RPD: '50' }))).toEqual([]);
+  });
+
+  it('parses the model chain, per-model limits and the legacy GEN_MODEL', () => {
+    const config = parseConfig({ GEN_MODELS: 'a, b ,a', GEN_LIMITS: 'a=5/1000/50; b=2/500/20', GEN_LIVE_BUDGET_MS: '5000' });
+    expect(config.generation.models).toEqual(['a', 'b']);
+    expect(config.generation.limitsByModel).toEqual({ a: { rpm: 5, tpm: 1000, rpd: 50 }, b: { rpm: 2, tpm: 500, rpd: 20 } });
+    expect(config.generation.limits).toEqual({ rpm: 5, tpm: 1000, rpd: 50 });
+    expect(config.generation.liveBudgetMs).toBe(5000);
+    expect(generationLimitDefaults(config)).toEqual([]);
+    const partial = parseConfig({ GEN_MODELS: 'a,b', GEN_LIMITS: 'a=5/1000/50' });
+    expect(partial.generation.limitsByModel.b).toEqual({ rpm: 10, tpm: 100_000, rpd: 200 });
+    expect(partial.generation.modelsWithDefaultLimits).toEqual(['b']);
+    expect(generationLimitDefaults(partial)).toEqual(['GEN_RPM', 'GEN_TPM', 'GEN_RPD']);
+    expect(parseConfig({ GEN_MODEL: 'legacy-model' }).generation.models).toEqual(['legacy-model']);
+    expect(() => parseConfig({ GEN_LIMITS: 'a=5/1000' })).toThrow(ConfigError);
+    expect(() => parseConfig({ GEN_LIVE_BUDGET_MS: '10' })).toThrow(ConfigError);
   });
 
   it('validates generation and answer settings', () => {

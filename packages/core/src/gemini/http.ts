@@ -10,7 +10,7 @@ export interface FetchResponseLike {
 
 export type FetchLike = (
   url: string,
-  init: { method: 'POST'; headers: Record<string, string>; body: string },
+  init: { method: 'POST'; headers: Record<string, string>; body: string; signal?: AbortSignal | undefined },
 ) => Promise<FetchResponseLike>;
 
 export const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
@@ -28,11 +28,18 @@ export class GeminiApiError extends Error {
   /** Server-suggested delay (RetryInfo.retryDelay or Retry-After), if any. */
   readonly retryAfterMs: number | undefined;
 
-  constructor(message: string, options: { status: number; retryable: boolean; retryAfterMs?: number | undefined; cause?: unknown }) {
+  /** The call was aborted by a time budget (live mode). */
+  readonly timeout: boolean;
+
+  constructor(
+    message: string,
+    options: { status: number; retryable: boolean; retryAfterMs?: number | undefined; cause?: unknown; timeout?: boolean | undefined },
+  ) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.status = options.status;
     this.retryable = options.retryable;
     this.retryAfterMs = options.retryAfterMs;
+    this.timeout = options.timeout ?? false;
   }
 }
 
@@ -89,4 +96,9 @@ export function describeErrorResponse(
 /** Removes every occurrence of the API key from a message. */
 export function redactKey(message: string, apiKey: string): string {
   return apiKey ? message.split(apiKey).join('[REDACTED]') : message;
+}
+
+/** True for fetch aborts caused by an AbortSignal (timeout or manual abort). */
+export function isAbortError(error: unknown): boolean {
+  return error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError');
 }

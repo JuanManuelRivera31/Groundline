@@ -1,11 +1,11 @@
-import { ANSWER_STATUSES, type AnswerStatus, type ModelAnswer, type ModelCitation } from './types.ts';
+import { MODEL_STATUSES, type ModelAnswer, type ModelCitation, type ModelStatus } from './types.ts';
 
 /** JSON Schema for the model's structured output; source ids are restricted to the ones sent. */
 export function answerResponseSchema(sourceIds: readonly string[]): Record<string, unknown> {
   return {
     type: 'object',
     properties: {
-      status: { type: 'string', enum: [...ANSWER_STATUSES] },
+      status: { type: 'string', enum: [...MODEL_STATUSES] },
       declined_injection: { type: 'boolean' },
       answer: { type: 'string' },
       citations: {
@@ -45,7 +45,7 @@ export function parseModelAnswer(text: string): ParseResult {
   if (!isRecord(raw)) return { ok: false, error: 'response is not a JSON object' };
 
   const status = raw.status;
-  if (typeof status !== 'string' || !(ANSWER_STATUSES as readonly string[]).includes(status)) {
+  if (typeof status !== 'string' || !(MODEL_STATUSES as readonly string[]).includes(status)) {
     return { ok: false, error: `invalid status ${JSON.stringify(status)}` };
   }
   if (typeof raw.answer !== 'string') return { ok: false, error: 'answer must be a string' };
@@ -70,7 +70,7 @@ export function parseModelAnswer(text: string): ParseResult {
   return {
     ok: true,
     value: {
-      status: status as AnswerStatus,
+      status: status as ModelStatus,
       declined_injection: raw.declined_injection,
       answer: raw.answer,
       citations,

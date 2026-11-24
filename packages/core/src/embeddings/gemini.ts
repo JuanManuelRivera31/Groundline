@@ -2,6 +2,7 @@ import type { EmbeddingRequestShape } from '../config.ts';
 import {
   describeErrorResponse,
   GEMINI_API_BASE_URL,
+  isAbortError,
   observedHeaders as readObservedHeaders,
   redactKey,
   safeJson,
@@ -70,7 +71,11 @@ export class GeminiEmbeddingClient implements EmbeddingClient {
     };
   }
 
-  async embedBatch(texts: readonly string[], taskType: EmbeddingTaskType): Promise<EmbedCallResult> {
+  async embedBatch(
+    texts: readonly string[],
+    taskType: EmbeddingTaskType,
+    options: { readonly signal?: AbortSignal | undefined } = {},
+  ): Promise<EmbedCallResult> {
     if (texts.length === 0) return { vectors: [], observedHeaders: {} };
     if (texts.length > this.maxBatchSize) {
       throw new Error(`Batch of ${texts.length} texts exceeds maxBatchSize ${this.maxBatchSize}.`);
@@ -83,8 +88,12 @@ export class GeminiEmbeddingClient implements EmbeddingClient {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': this.#apiKey },
         body: JSON.stringify(this.buildRequestBody(texts, taskType)),
+        signal: options.signal,
       });
     } catch (cause) {
+      if (isAbortError(cause)) {
+        throw new EmbeddingApiError('Gemini embeddings request timed out (live budget).', { status: 0, retryable: true, cause, timeout: true });
+      }
       throw new EmbeddingApiError(this.#redact(`Gemini embeddings request failed: ${String(cause)}`), {
         status: 0,
         retryable: true,

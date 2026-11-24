@@ -13,7 +13,7 @@ export function createEmbeddingClient(config: AppConfig): EmbeddingClient | unde
     dimensions: config.embedding.dimensions,
     maxBatchSize: config.embedding.batchSize,
     requestShape: config.embedding.requestShape,
-    fetch: (url, init) => fetch(url, init),
+    fetch: (url, init) => fetch(url, { ...init, signal: init.signal ?? null }),
   });
 }
 

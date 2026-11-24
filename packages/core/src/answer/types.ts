@@ -1,5 +1,29 @@
-export const ANSWER_STATUSES = ['answered', 'insufficient', 'handoff', 'declined'] as const;
+/** Statuses the model may choose (the response schema enum). */
+export const MODEL_STATUSES = ['answered', 'insufficient', 'handoff', 'declined'] as const;
+export type ModelStatus = (typeof MODEL_STATUSES)[number];
+
+/** Final statuses: the model's, plus "unavailable", set only by code when generation (or the live query embedding) is unavailable. */
+export const ANSWER_STATUSES = [...MODEL_STATUSES, 'unavailable'] as const;
 export type AnswerStatus = (typeof ANSWER_STATUSES)[number];
+
+export type AnswerMode = 'eval' | 'live';
+
+/** Where the articles shown with an answer came from. */
+export type RetrievalFallback = 'vector' | 'fts' | 'none';
+
+/** One generation attempt (HTTP call or a locally skipped model). */
+export interface GenerationAttempt {
+  readonly model: string;
+  /** HTTP status; 0 for network/timeout; null when skipped locally (quota or rate window). */
+  readonly status: number | null;
+  readonly outcome: 'ok' | 'http_error' | 'timeout' | 'network' | 'quota_local' | 'rate_local' | 'budget';
+  readonly ms: number;
+}
+
+export interface ArticleLink {
+  readonly title: string;
+  readonly url: string;
+}
 
 /** A retrieved chunk as the answer engine sees it (vector or hybrid). */
 export interface RetrievedChunk {
@@ -36,7 +60,7 @@ export interface ModelCitation {
 
 /** The model's structured output (validated shape, unvalidated content). */
 export interface ModelAnswer {
-  readonly status: AnswerStatus;
+  readonly status: ModelStatus;
   readonly declined_injection: boolean;
   readonly answer: string;
   readonly citations: readonly ModelCitation[];
@@ -54,7 +78,7 @@ export interface VerifiedCitation {
   readonly quote: string;
 }
 
-export type InvalidCitationReason = 'unknown_source' | 'quote_not_found' | 'quote_too_long' | 'empty_quote';
+export type InvalidCitationReason = 'unknown_source' | 'quote_not_found' | 'quote_too_long' | 'quote_too_short' | 'empty_quote';
 
 export interface InvalidCitation extends ModelCitation {
   readonly reason: InvalidCitationReason;
@@ -96,7 +120,17 @@ export interface AnswerResult {
   readonly maxSimilarity: number;
   readonly floorHit: boolean;
   /** Status the model chose before code validation (null if the model was not called). */
-  readonly modelStatus: AnswerStatus | null;
+  readonly modelStatus: ModelStatus | null;
+  readonly mode: AnswerMode;
+  /** Model that produced the validated answer (null if none did). */
+  readonly answeredBy: string | null;
+  /** Model switches in the chain (live mode); 0 in eval mode. */
+  readonly hops: number;
+  readonly attempts: readonly GenerationAttempt[];
+  /** "vector" normally; "fts"/"none" when the live query embedding failed. */
+  readonly retrievalFallback: RetrievalFallback;
+  /** Articles shown with an "unavailable" answer (up to 3 distinct documents). */
+  readonly articles: readonly ArticleLink[];
   /** Citations returned by the model, before validation. */
   readonly modelCitations: readonly ModelCitation[];
   readonly invalidCitations: readonly InvalidCitation[];

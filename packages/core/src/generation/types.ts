@@ -7,6 +7,8 @@ export interface GenerateRequest {
   readonly user: string;
   /** JSON Schema the response must follow. */
   readonly responseSchema: unknown;
+  /** Aborts the HTTP call (live-mode time budget). */
+  readonly signal?: AbortSignal | undefined;
 }
 
 /** Real token counts from the API's usageMetadata. */

@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { answerQuestion, generationLimitDefaults, planEmbeddings, PROMPT_VERSION } from '@groundline/core';
+import { answerQuestion, generationLimitDefaults, planEmbeddings } from '@groundline/core';
 import { PgDb } from '@groundline/db/node';
 import { createAnswerRuntime } from '@groundline/evals';
 import { loadConfig } from '../env.ts';
@@ -25,13 +25,16 @@ async function main(): Promise<void> {
   }
   const db = new PgDb(config.databaseUrl);
   try {
-    const runtime = await createAnswerRuntime(config, db, { embedKind: 'embed_query' });
+    const runtime = await createAnswerRuntime(config, db, { embedKind: 'embed_query', mode: 'live' });
     const plan = await planEmbeddings(cacheStoreFor(db), config.embedding, [question], 'RETRIEVAL_QUERY');
-    const g = runtime.generationQuota;
     const e = runtime.embeddingQuota;
-    console.log(`Generation requests: up to 1 (0 if below the floor) | remaining today (${g.model}): ${g.remaining} of ${g.limit}`);
+    console.log(
+      `Live mode: model chain ${runtime.generationQuotas.map((q) => q.model).join(' → ')}, budget ${config.generation.liveBudgetMs} ms. ` +
+        'Generation requests: up to 1 per model (0 if below the floor).',
+    );
+    for (const q of runtime.generationQuotas) console.log(`  remaining today (${q.model}): ${q.remaining} of ${q.limit}`);
     console.log(`Embedding requests: ${plan.misses.length} | remaining today (${e.model}): ${e.remaining} of ${e.limit}`);
-    if (g.remaining < 1) throw new Error('No generation quota left today (resets at midnight Pacific time).');
+    if (runtime.generationQuotas.every((q) => q.remaining < 1)) throw new Error('No generation quota left today on any chain model (resets at midnight Pacific time).');
 
     const r = await answerQuestion(runtime.deps, question);
     const cited = new Set(r.citations.map((c) => c.sourceId));
@@ -43,10 +46,15 @@ async function main(): Promise<void> {
     for (const s of r.sources) console.log(`  ${s.id}${cited.has(s.id) ? '*' : ' '} ${(s.similarity ?? 0).toFixed(4)}  ${s.url}`);
     if (r.invalidCitations.length > 0) console.log(`Invalid citations removed: ${r.invalidCitations.map((c) => `[${c.marker}] ${c.reason}`).join(', ')}`);
     if (r.removedSentences.length > 0) console.log(`Sentences removed: ${r.removedSentences.length} (${r.removedSentences.map((s) => s.reason).join(', ')})`);
+    if (r.articles.length > 0) console.log(`Articles (${r.retrievalFallback}): ${r.articles.map((a) => a.url).join(', ')}`);
     if (r.error) console.log(`Note: ${r.error}`);
     console.log(
+      `Answered by: ${r.answeredBy ?? 'none'} | hops ${r.hops} | retrieval ${r.retrievalFallback} | attempts: ` +
+        (r.attempts.map((a) => `${a.model}:${a.status ?? a.outcome} ${a.ms} ms`).join(', ') || 'none'),
+    );
+    console.log(
       `\nMax similarity ${r.maxSimilarity.toFixed(4)} vs floor ${runtime.deps.config.floor.toFixed(3)}${r.floorHit ? ' (floor hit: model not called)' : ''}` +
-        ` | prompt ${PROMPT_VERSION} | model ${config.generation.model}`,
+        ` | prompt ${r.promptVersion}`,
     );
     console.log(
       `Latency ${(r.latency.totalMs / 1000).toFixed(2)} s (retrieval ${r.latency.retrievalMs} ms, generation ${r.latency.generationMs} ms, queue ${r.latency.queueWaitMs} ms)` +

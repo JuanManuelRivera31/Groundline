@@ -1,6 +1,7 @@
 import {
   describeErrorResponse,
   GEMINI_API_BASE_URL,
+  isAbortError,
   observedHeaders,
   redactKey,
   safeJson,
@@ -78,8 +79,12 @@ export class GeminiGenerationClient implements GenerationClient {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': this.#options.apiKey },
         body: JSON.stringify(this.buildRequestBody(request)),
+        signal: request.signal,
       });
     } catch (cause) {
+      if (isAbortError(cause)) {
+        throw new GenerationApiError('Gemini generate request timed out (live budget).', { status: 0, retryable: true, cause, timeout: true });
+      }
       throw new GenerationApiError(this.#redact(`Gemini generate request failed: ${String(cause)}`), {
         status: 0,
         retryable: true,

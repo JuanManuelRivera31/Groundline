@@ -19,7 +19,7 @@ export interface EmbeddingClient {
   readonly model: string;
   readonly dimensions: number;
   readonly maxBatchSize: number;
-  embedBatch(texts: readonly string[], taskType: EmbeddingTaskType): Promise<EmbedCallResult>;
+  embedBatch(texts: readonly string[], taskType: EmbeddingTaskType, options?: { readonly signal?: AbortSignal | undefined }): Promise<EmbedCallResult>;
 }
 
 /** Error from the embeddings endpoint; see GeminiApiError for the retry fields. */
