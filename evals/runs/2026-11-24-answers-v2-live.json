@@ -1,0 +1,1566 @@
+{
+  "kind": "answers",
+  "set": "dev",
+  "label": "v2-live",
+  "createdAt": "2026-11-24T20:15:27.832Z",
+  "partial": false,
+  "mode": "live",
+  "sample": {
+    "n": 12,
+    "seed": 20261123
+  },
+  "promptVersion": "v2",
+  "config": {
+    "generationModel": "gemini-3.5-flash-lite",
+    "modelChain": [
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite"
+    ],
+    "liveBudgetMs": 8000,
+    "promptVersion": "v2",
+    "temperature": 0,
+    "maxOutputTokens": 1024,
+    "thinkingLevel": "MINIMAL",
+    "schemaField": "responseJsonSchema",
+    "generationLimits": {
+      "rpm": 10,
+      "tpm": 100000,
+      "rpd": 200
+    },
+    "embeddingModel": "gemini-embedding-001",
+    "retrievalMode": "vector",
+    "candidates": 20,
+    "sources": 6,
+    "floor": 0.6
+  },
+  "metrics": {
+    "questions": 12,
+    "behavior": {
+      "overall": {
+        "value": 1,
+        "lo": 0.7575059904469021,
+        "hi": 1,
+        "hits": 12,
+        "n": 12
+      },
+      "byExpected": {
+        "answer": {
+          "value": 1,
+          "lo": 0.700854948272956,
+          "hi": 1,
+          "hits": 9,
+          "n": 9
+        },
+        "abstain": {
+          "value": 1,
+          "lo": 0.3423802239546494,
+          "hi": 1,
+          "hits": 2,
+          "n": 2
+        },
+        "handoff": {
+          "value": 1,
+          "lo": 0.2065493117918027,
+          "hi": 1,
+          "hits": 1,
+          "n": 1
+        },
+        "decline": {
+          "value": 0,
+          "lo": 0,
+          "hi": 0,
+          "hits": 0,
+          "n": 0
+        }
+      }
+    },
+    "confusion": {
+      "answer": {
+        "answered": 9,
+        "insufficient": 0,
+        "handoff": 0,
+        "declined": 0,
+        "unavailable": 0
+      },
+      "abstain": {
+        "answered": 0,
+        "insufficient": 2,
+        "handoff": 0,
+        "declined": 0,
+        "unavailable": 0
+      },
+      "handoff": {
+        "answered": 0,
+        "insufficient": 0,
+        "handoff": 1,
+        "declined": 0,
+        "unavailable": 0
+      },
+      "decline": {
+        "answered": 0,
+        "insufficient": 0,
+        "handoff": 0,
+        "declined": 0,
+        "unavailable": 0
+      }
+    },
+    "wrappedInjectionsAnswered": 0,
+    "citations": {
+      "total": 20,
+      "documentPrecision": {
+        "value": 0.9,
+        "lo": 0.6989663528135878,
+        "hi": 0.9721335190383086,
+        "hits": 18,
+        "n": 20
+      },
+      "sectionPrecision": {
+        "value": 0.9,
+        "lo": 0.6989663528135878,
+        "hi": 0.9721335190383086,
+        "hits": 18,
+        "n": 20
+      }
+    },
+    "quotes": {
+      "returned": 23,
+      "verified": {
+        "value": 1,
+        "lo": 0.8568833796149266,
+        "hi": 1,
+        "hits": 23,
+        "n": 23
+      },
+      "invalidByReason": {}
+    },
+    "removedSentences": {
+      "failedCitation": 0,
+      "unmarkedClaim": 0
+    },
+    "downgradedNoValidCitations": 0,
+    "invalidOutput": 0,
+    "floorHits": {
+      "answer": 0,
+      "abstain": 2,
+      "handoff": 0,
+      "decline": 0
+    },
+    "latencyMs": {
+      "all": {
+        "n": 12,
+        "p50": 2551,
+        "p95": 5516.849999999999,
+        "max": 5634
+      },
+      "modelCalls": {
+        "n": 10,
+        "p50": 3909,
+        "p95": 5538.15,
+        "max": 5634
+      },
+      "firstAttempt": {
+        "n": 5,
+        "p50": 1431,
+        "p95": 4436.4,
+        "max": 5178
+      }
+    },
+    "retriedAnswers": 5,
+    "queueWaitMs": 1,
+    "tokens": {
+      "modelCalls": 10,
+      "meanPrompt": 2766.1,
+      "meanOutput": 237.8,
+      "meanThoughts": 0
+    },
+    "generationRequests": 15,
+    "availability": {
+      "unavailable": {
+        "value": 0,
+        "lo": 0,
+        "hi": 0.2424940095530979,
+        "hits": 0,
+        "n": 12
+      },
+      "answeredBy": {
+        "gemini-3.5-flash-lite": 5,
+        "gemini-3.1-flash-lite": 5
+      },
+      "hops": {
+        "0": 5,
+        "1": 5
+      },
+      "attemptsByModel": {
+        "gemini-3.5-flash-lite": {
+          "200": 5,
+          "503": 5
+        },
+        "gemini-3.1-flash-lite": {
+          "200": 5
+        }
+      },
+      "retrievalFallback": {
+        "vector": 12
+      }
+    },
+    "quoteWords": {
+      "all": {
+        "n": 23,
+        "min": 6,
+        "p25": 15.5,
+        "median": 21,
+        "p75": 30.5,
+        "max": 45
+      },
+      "valid": {
+        "n": 23,
+        "min": 6,
+        "p25": 15.5,
+        "median": 21,
+        "p75": 30.5,
+        "max": 45
+      },
+      "over40": 2,
+      "over80": 0
+    },
+    "costUsd": {
+      "meanPerConversation": null,
+      "total": null
+    }
+  },
+  "records": [
+    {
+      "id": "dev-001",
+      "category": "install_integrations",
+      "expected_behavior": "answer",
+      "question": "i was using the manual verson of the script to trigger pageviews myself, how do i do that with the new snippet?",
+      "expected_urls": [
+        "https://plausible.io/docs/script-update-guide#7-updated-tracking-pageviews-manually",
+        "https://plausible.io/docs/script-extensions#manual-pageviews"
+      ],
+      "reference_answer": "If you previously used the manual extension, set the autoCapturePageviews option to false in plausible.init({ autoCapturePageviews: false }) so you control when pageviews are sent.",
+      "key_facts": [
+        "Set autoCapturePageviews to false in plausible.init"
+      ],
+      "status": "answered",
+      "model_status": "answered",
+      "declined_injection": false,
+      "answer": "If you were previously using the manual extension to track pageviews manually, you will need to set the `autoCapturePageviews` option to `false` [1].",
+      "citations": [
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/script-update-guide#7-updated-tracking-pageviews-manually",
+          "quote": "If you were previously using the `manual` extension to track pageviews manually, you will need to set `autoCapturePageviews` option to `false`:"
+        }
+      ],
+      "cited_sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/script-update-guide#7-updated-tracking-pageviews-manually",
+          "title": "Update your Plausible script",
+          "heading_path": "Update your Plausible script > What has changed? > 7. Updated: Tracking pageviews manually",
+          "text": "If you were previously using the `manual` extension to track pageviews manually, you will need to set `autoCapturePageviews` option to `false`:\n\n```javascript\nplausible.init({\n  autoCapturePageviews: false\n})\n```\n\nSee Custom locations guide for details."
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/script-update-guide#7-updated-tracking-pageviews-manually",
+          "similarity": 0.7732277051670741
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/script-extensions#manual-pageviews",
+          "similarity": 0.7489001527756437
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/custom-locations",
+          "similarity": 0.7203656768362907
+        },
+        {
+          "source_id": "S4",
+          "url": "https://plausible.io/docs/script-update-guide",
+          "similarity": 0.7120093491074665
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/custom-query-params#2-trigger-the-pageview-event-with-a-custom-url-attribute",
+          "similarity": 0.7067141322280753
+        },
+        {
+          "source_id": "S6",
+          "url": "https://plausible.io/docs/proxy/guides/vercel#step-4-update-your-snippet",
+          "similarity": 0.6929924671058388
+        }
+      ],
+      "invalid_citations": [],
+      "removed_sentences": [],
+      "model_citations": 1,
+      "max_similarity": 0.7732277051670741,
+      "floor_hit": false,
+      "handoff_offered": false,
+      "handoff_reason": "",
+      "error": null,
+      "finish_reason": "STOP",
+      "usage": {
+        "generationRequests": 1,
+        "promptTokens": 3005,
+        "outputTokens": 137,
+        "thoughtsTokens": 0,
+        "embeddingTokens": 28
+      },
+      "latency": {
+        "retrievalMs": 11,
+        "generationMs": 1413,
+        "totalMs": 1431,
+        "queueWaitMs": 0
+      },
+      "cost_usd": 0.0012482,
+      "mode": "live",
+      "prompt_version": "v2",
+      "answered_by": "gemini-3.5-flash-lite",
+      "hops": 0,
+      "attempts": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "status": 200,
+          "outcome": "ok",
+          "ms": 1413
+        }
+      ],
+      "retrieval_fallback": "vector",
+      "articles": []
+    },
+    {
+      "id": "dev-015",
+      "category": "billing_account",
+      "expected_behavior": "answer",
+      "question": "I want everyone on my team to use 2FA, not just me. Can I force that, and where is the switch?",
+      "expected_urls": [
+        "https://plausible.io/docs/2fa#require-all-team-members-to-enable-2fa"
+      ],
+      "reference_answer": "Yes. Open Team settings for your team and, in the General section under Force Two-Factor Authentication (2FA), click Enforce 2FA and confirm with OK. All members, including you, then have to set up 2FA before they can access the team sites.",
+      "key_facts": [
+        "Enable it with Enforce 2FA under Force Two-Factor Authentication (2FA) in Team settings > General",
+        "All members including you must set up 2FA",
+        "Members without 2FA get an email and can't skip setup"
+      ],
+      "status": "answered",
+      "model_status": "answered",
+      "declined_injection": false,
+      "answer": "Yes, you can require all your team members to enable two-factor authentication [1]. To find the switch, select the team you want to manage from the top-right menu and open Team settings [1]. In the General section of Team settings, you will find the Force Two-Factor Authentication (2FA) option [1].",
+      "citations": [
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/2fa#require-all-team-members-to-enable-2fa",
+          "quote": "To improve your account security, you can require all your team members to enable two-factor authentication (2FA)"
+        },
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/2fa#require-all-team-members-to-enable-2fa",
+          "quote": "In the top-right menu, click your account name, select the team you want to manage, then open Team settings."
+        },
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/2fa#require-all-team-members-to-enable-2fa",
+          "quote": "In the General section of Team settings, you’ll find the Force Two-Factor Authentication (2FA) option."
+        }
+      ],
+      "cited_sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/2fa#require-all-team-members-to-enable-2fa",
+          "title": "Enable two-factor authentication (2FA)",
+          "heading_path": "Enable two-factor authentication (2FA) > Require all team members to enable 2FA",
+          "text": "To improve your account security, you can require all your team members to enable two-factor authentication (2FA):\n\n* First, set up a team if you haven’t already. Here’s how to create one.\n* In the top-right menu, click your account name, select the team you want to manage, then open **Team settings**.\n* In the **General** section of **Team settings**, you’ll find the **Force Two-Factor Authentication (2FA)** option.\n* Click **Enforce 2FA** to make it mandatory for all team members.\nEnforce 2FA\n* Confirm by clicking OK. All members, including you, will need to set up 2FA before they can access the team sites.\n* To remove the requirement later, click **Stop Forcing 2FA**.\n\nTeam members who don't have 2FA yet get an email asking them to set it up. The next time they open the team's sites, they're taken to the 2FA setup and can't skip it. They keep access to their account and to any other teams they belong to."
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/2fa#require-all-team-members-to-enable-2fa",
+          "similarity": 0.768101467603359
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/sso#enabling-sso-enforcement",
+          "similarity": 0.7000516057014465
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/users-roles#improving-team-security",
+          "similarity": 0.6991356790580954
+        },
+        {
+          "source_id": "S4",
+          "url": "https://plausible.io/docs/team-settings",
+          "similarity": 0.6823534369468689
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/sso#security",
+          "similarity": 0.6660827199269974
+        },
+        {
+          "source_id": "S6",
+          "url": "https://plausible.io/docs/2fa",
+          "similarity": 0.6630879640579224
+        }
+      ],
+      "invalid_citations": [],
+      "removed_sentences": [],
+      "model_citations": 3,
+      "max_similarity": 0.768101467603359,
+      "floor_hit": false,
+      "handoff_offered": false,
+      "handoff_reason": "",
+      "error": null,
+      "finish_reason": "STOP",
+      "usage": {
+        "generationRequests": 1,
+        "promptTokens": 2840,
+        "outputTokens": 258,
+        "thoughtsTokens": 0,
+        "embeddingTokens": 24
+      },
+      "latency": {
+        "retrievalMs": 9,
+        "generationMs": 1451,
+        "totalMs": 1470,
+        "queueWaitMs": 0
+      },
+      "cost_usd": 0.0015006,
+      "mode": "live",
+      "prompt_version": "v2",
+      "answered_by": "gemini-3.5-flash-lite",
+      "hops": 0,
+      "attempts": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "status": 200,
+          "outcome": "ok",
+          "ms": 1451
+        }
+      ],
+      "retrieval_fallback": "vector",
+      "articles": []
+    },
+    {
+      "id": "dev-020",
+      "category": "dashboard_metrics",
+      "expected_behavior": "answer",
+      "question": "Clicks from my www site to my shop subdomain are showing up as outbound link clicks. Can I exclude them?",
+      "expected_urls": [
+        "https://plausible.io/docs/outbound-link-click-tracking#leave-out-clicks-to-your-own-subdomains"
+      ],
+      "reference_answer": "A link counts as outbound when it leads to a different hostname, which includes your own subdomains. To leave them out, add a `transformRequest` option to your `plausible.init` call that returns null for clicks to your own domain. Clicks already recorded stay in your stats, but you can filter by the url property with does not contain and your domain.",
+      "key_facts": [
+        "Different hostnames count as outbound, including your own subdomains",
+        "Use transformRequest in plausible.init to return null for your own domain",
+        "Already-recorded clicks stay in stats"
+      ],
+      "status": "answered",
+      "model_status": "answered",
+      "declined_injection": false,
+      "answer": "Yes, you can exclude clicks to your own subdomains by adding a `transformRequest` option to the `plausible.init` call in your snippet [1]. This function checks the hostname of the clicked URL and returns `null` to drop the event if it matches your domain or subdomains [1].",
+      "citations": [
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/outbound-link-click-tracking#leave-out-clicks-to-your-own-subdomains",
+          "quote": "To leave those clicks out, add a `transformRequest` option to the `plausible.init` call in your snippet."
+        },
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/outbound-link-click-tracking#leave-out-clicks-to-your-own-subdomains",
+          "quote": "if (host === 'yoursite.com' || host.endsWith('.yoursite.com')) { return null }"
+        }
+      ],
+      "cited_sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/outbound-link-click-tracking#leave-out-clicks-to-your-own-subdomains",
+          "title": "Outbound link tracking",
+          "heading_path": "Outbound link tracking > Leave out clicks to your own subdomains",
+          "text": "A link counts as outbound when it leads to a different hostname. That includes your own subdomains: a click from `www.yoursite.com` to `shop.yoursite.com` is recorded as an outbound link click.\n\nTo leave those clicks out, add a `transformRequest` option to the `plausible.init` call in your snippet. Replace `yoursite.com` with your own domain:\n\n```javascript\nplausible.init({\n  // ... Other initialization options\n  transformRequest: function (payload) {\n    if (payload.n === 'Outbound Link: Click' && payload.p && payload.p.url) {\n      var host = new URL(payload.p.url).hostname\n      if (host === 'yoursite.com' || host.endsWith('.yoursite.com')) {\n        return null\n      }\n    }\n    return payload\n  }\n})\n```\n\nReturning `null` drops the event before it's sent. Clicks to all other sites are recorded as before. Clicks that were already recorded stay in your stats: to leave them out of your reports, filter by the **url** property with \"does not contain\" and your domain."
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/outbound-link-click-tracking#leave-out-clicks-to-your-own-subdomains",
+          "similarity": 0.7941278219223079
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/outbound-link-click-tracking#how-to-disable-outbound-links-tracking-for-your-site",
+          "similarity": 0.7228994800388516
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/outbound-link-click-tracking#see-all-the-outbound-link-clicks-in-your-dashboard",
+          "similarity": 0.7028721812811114
+        },
+        {
+          "source_id": "S4",
+          "url": "https://plausible.io/docs/subdomain-hostname-filter#block-traffic-from-unwanted-hostnames",
+          "similarity": 0.701915979385381
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/custom-automatic-link-tracking",
+          "similarity": 0.6993050396028198
+        },
+        {
+          "source_id": "S6",
+          "url": "https://plausible.io/docs/outbound-link-click-tracking",
+          "similarity": 0.6937483573330964
+        }
+      ],
+      "invalid_citations": [],
+      "removed_sentences": [],
+      "model_citations": 2,
+      "max_similarity": 0.7941278219223079,
+      "floor_hit": false,
+      "handoff_offered": false,
+      "handoff_reason": "",
+      "error": null,
+      "finish_reason": "STOP",
+      "usage": {
+        "generationRequests": 2,
+        "promptTokens": 2790,
+        "outputTokens": 209,
+        "thoughtsTokens": 0,
+        "embeddingTokens": 26
+      },
+      "latency": {
+        "retrievalMs": 13,
+        "generationMs": 4160,
+        "totalMs": 4186,
+        "queueWaitMs": 0
+      },
+      "cost_usd": null,
+      "mode": "live",
+      "prompt_version": "v2",
+      "answered_by": "gemini-3.1-flash-lite",
+      "hops": 1,
+      "attempts": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "status": 503,
+          "outcome": "http_error",
+          "ms": 827
+        },
+        {
+          "model": "gemini-3.1-flash-lite",
+          "status": 200,
+          "outcome": "ok",
+          "ms": 3333
+        }
+      ],
+      "retrieval_fallback": "vector",
+      "articles": []
+    },
+    {
+      "id": "dev-023",
+      "category": "install_integrations",
+      "expected_behavior": "answer",
+      "question": "ive set up my caddy config for the proxy, what do i change in my sites script tag now",
+      "expected_urls": [
+        "https://plausible.io/docs/proxy/guides/caddy#step-3-adjust-your-deployed-script"
+      ],
+      "reference_answer": "Change the script tag to load /js/script.js from your own domain and set the endpoint in plausible.init to /api/event.",
+      "key_facts": [
+        "Script src becomes /js/script.js",
+        "plausible.init endpoint is set to /api/event"
+      ],
+      "status": "answered",
+      "model_status": "answered",
+      "declined_injection": false,
+      "answer": "With the Caddy config in place, you can change the script tag on your site as follows: [1]",
+      "citations": [
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/proxy/guides/caddy#step-3-adjust-your-deployed-script",
+          "quote": "With the above config in place, you can change the script tag on your site as follows:"
+        }
+      ],
+      "cited_sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/proxy/guides/caddy#step-3-adjust-your-deployed-script",
+          "title": "Proxying Plausible through Caddy",
+          "heading_path": "Proxying Plausible through Caddy > Step 3: Adjust your deployed script",
+          "text": "With the above config in place, you can change the script tag on your site as follows:\n\n```html\n<script async src=\"/js/script.js\"></script>\n<script>\n  window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};\n  plausible.init({\n    endpoint: \"/api/event\"\n  })\n</script>\n```\n\nCourtesy: Francis Lavoie (@francislavoie) on a Caddy Community post."
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/proxy/guides/caddy#step-3-adjust-your-deployed-script",
+          "similarity": 0.802856087684637
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/proxy/guides/caddy",
+          "similarity": 0.7619819641113336
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/proxy/guides/nginx#step-3-adjust-your-deployed-script",
+          "similarity": 0.7549187394928194
+        },
+        {
+          "source_id": "S4",
+          "url": "https://plausible.io/docs/proxy/guides/apache#step-4-adjust-your-deployed-script",
+          "similarity": 0.7546729299231143
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/proxy/guides/netlify#step-3-update-your-snippet",
+          "similarity": 0.7341798227047709
+        },
+        {
+          "source_id": "S6",
+          "url": "https://plausible.io/docs/proxy/guides/nginx#step-2-update-your-nginx-config",
+          "similarity": 0.7214146305395336
+        }
+      ],
+      "invalid_citations": [],
+      "removed_sentences": [],
+      "model_citations": 1,
+      "max_similarity": 0.802856087684637,
+      "floor_hit": false,
+      "handoff_offered": false,
+      "handoff_reason": "",
+      "error": null,
+      "finish_reason": "STOP",
+      "usage": {
+        "generationRequests": 1,
+        "promptTokens": 3005,
+        "outputTokens": 111,
+        "thoughtsTokens": 0,
+        "embeddingTokens": 22
+      },
+      "latency": {
+        "retrievalMs": 22,
+        "generationMs": 1090,
+        "totalMs": 1124,
+        "queueWaitMs": 1
+      },
+      "cost_usd": 0.0011823,
+      "mode": "live",
+      "prompt_version": "v2",
+      "answered_by": "gemini-3.5-flash-lite",
+      "hops": 0,
+      "attempts": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "status": 200,
+          "outcome": "ok",
+          "ms": 1090
+        }
+      ],
+      "retrieval_fallback": "vector",
+      "articles": []
+    },
+    {
+      "id": "dev-025",
+      "category": "billing_account",
+      "expected_behavior": "answer",
+      "question": "signed up yesterday but never got the email to activate my account",
+      "expected_urls": [
+        "https://plausible.io/docs/register-account"
+      ],
+      "reference_answer": "Look for an email with the subject Your Plausible email verification code, which contains a four digit code. Check your spam folder and make sure you typed the right email address, and contact support if it still doesn't arrive.",
+      "key_facts": [
+        "Email subject is Your Plausible email verification code",
+        "Check spam folder and the email address typed",
+        "Contact support if the problem persists"
+      ],
+      "status": "answered",
+      "model_status": "answered",
+      "declined_injection": false,
+      "answer": "If you have not received your verification email, please check your spam folder and ensure that you have entered the correct email address [1]. If the problem persists, please contact us for further assistance [1].",
+      "citations": [
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/register-account",
+          "quote": "Don't see this email in your inbox? Please check your spam folder and whether you've typed in the correct email address. Contact us if the problem persists."
+        }
+      ],
+      "cited_sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/register-account",
+          "title": "Register for an account",
+          "heading_path": "Register for an account",
+          "text": "To use Plausible Analytics, you need to register an account. To explore the product, we offer you a free 30-day trial. No credit card is required to sign up for the trial, so there are no automatic charges when the trial ends. See how the free trial works for details.\n\nYou can test all the different features and use Plausible on multiple sites during the trial. Plausible is so lightweight that you can run it alongside Google Analytics without any negative impact on your site's performance.\n\nFill in your full name and email address, choose your account password and click on the **Start my free trial** button.\n\nRegister for an account with Plausible Analytics\n\n## Verify your email address\n\nWe'll send you an email to verify your email address. Look for an email with the subject line **Your Plausible email verification code**.\n\nPlease enter the four digit code that we sent to you through email to activate your Plausible Analytics account.\n\nDon't see this email in your inbox? Please check your spam folder and whether you've typed in the correct email address. Contact us if the problem persists.\n\nActivate your Plausible Analytics account\n\nOnce verified, your 30-day trial starts immediately. Register your account →\n\n## Next: connect your website\n\nAfter verification, add your website. Plausible then offers to set up a team so you can invite colleagues or clients. You can skip any of these steps and come back to them later. Then use the guide for your setup:\n\n- WordPress: install and connect the official plugin\n- Google Tag Manager: use the official template\n- Other platforms and installation methods\n\nFinish by checking that your site is receiving traffic. Creating an account alone does not start collecting visits."
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/register-account",
+          "similarity": 0.6419998193979167
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/troubleshoot-integration",
+          "similarity": 0.6027133407634506
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/ghost-integration",
+          "similarity": 0.5934765692637316
+        },
+        {
+          "source_id": "S4",
+          "url": "https://plausible.io/docs/buttondown#verify-that-the-stats-are-being-tracked",
+          "similarity": 0.5915148014733087
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/add-website",
+          "similarity": 0.5900311225671255
+        },
+        {
+          "source_id": "S6",
+          "url": "https://plausible.io/docs/npm-package#verify-your-installation",
+          "similarity": 0.589052771869468
+        }
+      ],
+      "invalid_citations": [],
+      "removed_sentences": [],
+      "model_citations": 1,
+      "max_similarity": 0.6419998193979167,
+      "floor_hit": false,
+      "handoff_offered": false,
+      "handoff_reason": "",
+      "error": null,
+      "finish_reason": "STOP",
+      "usage": {
+        "generationRequests": 2,
+        "promptTokens": 2774,
+        "outputTokens": 146,
+        "thoughtsTokens": 0,
+        "embeddingTokens": 17
+      },
+      "latency": {
+        "retrievalMs": 45,
+        "generationMs": 3562,
+        "totalMs": 3632,
+        "queueWaitMs": 0
+      },
+      "cost_usd": null,
+      "mode": "live",
+      "prompt_version": "v2",
+      "answered_by": "gemini-3.1-flash-lite",
+      "hops": 1,
+      "attempts": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "status": 503,
+          "outcome": "http_error",
+          "ms": 730
+        },
+        {
+          "model": "gemini-3.1-flash-lite",
+          "status": 200,
+          "outcome": "ok",
+          "ms": 2832
+        }
+      ],
+      "retrieval_fallback": "vector",
+      "articles": []
+    },
+    {
+      "id": "dev-029",
+      "category": "dashboard_metrics",
+      "expected_behavior": "answer",
+      "question": "I want to export my top pages report as a CSV. What does the dashboard export include, and how many rows do I get per file?",
+      "expected_urls": [
+        "https://plausible.io/docs/export-stats#what-the-dashboard-export-contains"
+      ],
+      "reference_answer": "The dashboard export is a ZIP with one CSV file per dashboard report, all following your selected date range and filters. Each file holds the top 300 entries, except the pages and exit pages files, which hold the top 100.",
+      "key_facts": [
+        "ZIP contains one CSV per dashboard report",
+        "Files follow the selected date range and filters",
+        "Top 300 entries per file, top 100 for pages and exit pages"
+      ],
+      "status": "answered",
+      "model_status": "answered",
+      "declined_injection": false,
+      "answer": "You can export your stats as a ZIP of CSV files directly from the dashboard [1]. The dashboard export includes files for visitors, pages, entry pages, exit pages, channels, sources, referrers, UTM tags, countries, regions, cities, browsers, operating systems, devices, custom properties, and conversions [2]. To keep the export quick, most files are limited to the top 300 entries, while the pages and exit pages files are limited to the top 100 entries [2].",
+      "citations": [
+        {
+          "marker": 1,
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/data-access#csv-export",
+          "quote": "You can export your stats directly from the Plausible dashboard as a ZIP of CSV files."
+        },
+        {
+          "marker": 2,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/export-stats#what-the-dashboard-export-contains",
+          "quote": "The ZIP file holds one CSV file per dashboard report: visitors, pages, entry pages, exit pages, channels, sources, referrers, UTM tags, countries, regions, cities, browsers, operating systems, devices, custom properties and conversions."
+        },
+        {
+          "marker": 2,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/export-stats#what-the-dashboard-export-contains",
+          "quote": "To keep the export quick, each of these files has the top 300 entries, and the pages and exit pages files have the top 100."
+        }
+      ],
+      "cited_sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/export-stats#what-the-dashboard-export-contains",
+          "title": "Export your website stats",
+          "heading_path": "Export your website stats > Export specific time ranges or audience segments > What the dashboard export contains",
+          "text": "The ZIP file holds one CSV file per dashboard report: visitors, pages, entry pages, exit pages, channels, sources, referrers, UTM tags, countries, regions, cities, browsers, operating systems, devices, custom properties and conversions. All of them follow the date range and filters you selected.\n\nThe visitors file follows the interval of your top chart, such as one row per day. The other files hold totals for the whole date range, with one row per page, source and so on. To keep the export quick, each of these files has the top 300 entries, and the pages and exit pages files have the top 100. For a full data export, refer to the instructions below.\n\nTip:\nIf you exported data for outbound link clicks, file downloads or 404 errors and want details like URLs, visitors, events and conversion rates, check the \"custom_props.csv\" file. The \"conversions.csv\" file only shows summary data.\n\nYou can open these CSV files in Excel or other data analysis tools."
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/data-access#csv-export",
+          "title": "Accessing your Plausible data",
+          "heading_path": "Accessing your Plausible data > CSV export",
+          "text": "You can export your stats directly from the Plausible dashboard as a ZIP of CSV files. Filter by date range, audience segment or goal before exporting to get exactly the slice you need.\n\n**Use this when:**\n- You need a one-off data extract for a report or spreadsheet\n- You want to import data into Excel, Google Sheets or another tool\n- You do not need to query data on a schedule or programmatically\n\nThe quick export is limited to 300 entries per report. For a full historical export of all your data, use the full export option in your site settings.\n\nExport your stats"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/export-stats#what-the-dashboard-export-contains",
+          "similarity": 0.7724335193634033
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/data-access#csv-export",
+          "similarity": 0.695215106010437
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/top-pages",
+          "similarity": 0.6855373382568359
+        },
+        {
+          "source_id": "S4",
+          "url": "https://plausible.io/docs/export-stats#export-all-stats-to-date",
+          "similarity": 0.6835270131685443
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/guided-tour#top-pages",
+          "similarity": 0.6689063113275964
+        },
+        {
+          "source_id": "S6",
+          "url": "https://plausible.io/docs/guided-tour#detailed-metrics-and-sorting",
+          "similarity": 0.6663869619369507
+        }
+      ],
+      "invalid_citations": [],
+      "removed_sentences": [],
+      "model_citations": 3,
+      "max_similarity": 0.7724335193634033,
+      "floor_hit": false,
+      "handoff_offered": false,
+      "handoff_reason": "",
+      "error": null,
+      "finish_reason": "STOP",
+      "usage": {
+        "generationRequests": 2,
+        "promptTokens": 2619,
+        "outputTokens": 325,
+        "thoughtsTokens": 0,
+        "embeddingTokens": 31
+      },
+      "latency": {
+        "retrievalMs": 35,
+        "generationMs": 4160,
+        "totalMs": 4211,
+        "queueWaitMs": 0
+      },
+      "cost_usd": null,
+      "mode": "live",
+      "prompt_version": "v2",
+      "answered_by": "gemini-3.1-flash-lite",
+      "hops": 1,
+      "attempts": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "status": 503,
+          "outcome": "http_error",
+          "ms": 654
+        },
+        {
+          "model": "gemini-3.1-flash-lite",
+          "status": 200,
+          "outcome": "ok",
+          "ms": 3506
+        }
+      ],
+      "retrieval_fallback": "vector",
+      "articles": []
+    },
+    {
+      "id": "dev-034",
+      "category": "api",
+      "expected_behavior": "answer",
+      "question": "we have a react native app. can we track screens in plausible even though there's no browser? how should we set it up",
+      "expected_urls": [
+        "https://plausible.io/docs/events-api#tracking-mobile-apps"
+      ],
+      "reference_answer": "Yes, use the Events API. Add your app to your account as a new site (the domain can be your app's name), send a pageview event each time a screen is shown with a url like app://localhost/settings, and send the requests from the app itself so the device IP is used. Also set the User-Agent header to one describing the device.",
+      "key_facts": [
+        "Add the app as a site; domain can be the app name",
+        "Send a pageview per screen with url like app://localhost/settings",
+        "Send requests from the app itself",
+        "Set a device User-Agent header"
+      ],
+      "status": "answered",
+      "model_status": "answered",
+      "declined_injection": false,
+      "answer": "Yes, you can track screens in your React Native app using the Events API, as it is designed for environments where the standard script cannot run [1][2]. To set this up, first add your app as a new site in your Plausible account [1]. Then, send a POST request to the Events API with a 'pageview' event each time a screen is shown, using a custom URL format like 'app://localhost/screenName' [1]. It is important to set the 'User-Agent' header to describe the device, otherwise, your reports for devices and operating systems will have limited data [1].",
+      "citations": [
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/events-api#tracking-mobile-apps",
+          "quote": "The Events API works for iOS, Android and cross-platform apps built with React Native, Expo or similar frameworks, where our script and NPM package can't run because there's no browser."
+        },
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/events-api#tracking-mobile-apps",
+          "quote": "1. Add your app to your Plausible account as a new site. The domain doesn't need to be a real domain name, so you can use your app's name."
+        },
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/events-api#tracking-mobile-apps",
+          "quote": "2. Send a `pageview` event each time a screen is shown, and custom events for the actions you want to count. Name your screens like page paths in the `url` (for example `app://localhost/settings`), and they appear in your **Top Pages** report like any other page."
+        },
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/events-api#tracking-mobile-apps",
+          "quote": "Set the `User-Agent` header to one that describes the device, such as the device's web view user agent. Without it, requests carry your HTTP library's default user agent, which leaves the **Devices**, **Browsers** and **Operating Systems** reports with little to show."
+        },
+        {
+          "marker": 2,
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/data-access#events-api",
+          "quote": "The Events API lets you send pageviews and custom events to Plausible without the JavaScript snippet. This is useful for server-side tracking, mobile apps or any environment where loading a script is not possible."
+        }
+      ],
+      "cited_sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/events-api#tracking-mobile-apps",
+          "title": "Plausible Events API reference",
+          "heading_path": "Plausible Events API reference > Endpoints > Tracking mobile apps",
+          "text": "The Events API works for iOS, Android and cross-platform apps built with React Native, Expo or similar frameworks, where our script and NPM package can't run because there's no browser.\n\n1. Add your app to your Plausible account as a new site. The domain doesn't need to be a real domain name, so you can use your app's name.\n2. Send a `pageview` event each time a screen is shown, and custom events for the actions you want to count. Name your screens like page paths in the `url` (for example `app://localhost/settings`), and they appear in your **Top Pages** report like any other page.\n3. Send the requests from the app itself. Plausible then uses the device's IP address, so you don't need to set `X-Forwarded-For`.\n\nSet the `User-Agent` header to one that describes the device, such as the device's web view user agent. Without it, requests carry your HTTP library's default user agent, which leaves the **Devices**, **Browsers** and **Operating Systems** reports with little to show.\n\nHere's an example in React Native:\n\n```js\nconst PLAUSIBLE_DOMAIN = 'myapp' // the name you added your app with in Plausible\n\nexport function trackScreen(screenName, props) {\n  return fetch('https://plausible.io/api/event', {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      'User-Agent': deviceUserAgent // for example from getUserAgent() in react-native-device-info\n    },\n    body: JSON.stringify({\n      name: 'pageview',\n      url: `app://localhost/${screenName}`,\n      domain: PLAUSIBLE_DOMAIN,\n      props\n    })\n  })\n}\n```\n\nCall it whenever the visible screen changes, for example from your navigation library's state change listener. Since apps don't have a referrer, visits are counted under Direct / None unless you send a `referrer` or UTM tags in the `url`.\n\nCommunity-built SDKs for some platforms are listed in our integration guides."
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/data-access#events-api",
+          "title": "Accessing your Plausible data",
+          "heading_path": "Accessing your Plausible data > Events API",
+          "text": "The Events API lets you send pageviews and custom events to Plausible without the JavaScript snippet. This is useful for server-side tracking, mobile apps or any environment where loading a script is not possible.\n\n**Use this when:**\n- You are building an iOS or Android app\n- You want to track server-side events or API interactions\n- You are setting up a proxy that forwards events from your own backend\n\nThe Events API is for sending data to Plausible, not reading it. To query your stats programmatically, use the Stats API instead.\n\nEvents API reference"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/events-api#tracking-mobile-apps",
+          "similarity": 0.7860713239333431
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/spa-support",
+          "similarity": 0.7134119484845388
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/integration-guides#server-side-tracking-and-mobile-apps-tracking",
+          "similarity": 0.7087635435548616
+        },
+        {
+          "source_id": "S4",
+          "url": "https://plausible.io/docs/npm-package",
+          "similarity": 0.6945837943131865
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/data-access#events-api",
+          "similarity": 0.6926367489289271
+        },
+        {
+          "source_id": "S6",
+          "url": "https://plausible.io/docs/integration-guides#mobile-and-native-app-sdks",
+          "similarity": 0.6900812593126675
+        }
+      ],
+      "invalid_citations": [],
+      "removed_sentences": [],
+      "model_citations": 5,
+      "max_similarity": 0.7860713239333431,
+      "floor_hit": false,
+      "handoff_offered": false,
+      "handoff_reason": "",
+      "error": null,
+      "finish_reason": "STOP",
+      "usage": {
+        "generationRequests": 2,
+        "promptTokens": 2730,
+        "outputTokens": 537,
+        "thoughtsTokens": 0,
+        "embeddingTokens": 30
+      },
+      "latency": {
+        "retrievalMs": 33,
+        "generationMs": 5366,
+        "totalMs": 5421,
+        "queueWaitMs": 0
+      },
+      "cost_usd": null,
+      "mode": "live",
+      "prompt_version": "v2",
+      "answered_by": "gemini-3.1-flash-lite",
+      "hops": 1,
+      "attempts": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "status": 503,
+          "outcome": "http_error",
+          "ms": 599
+        },
+        {
+          "model": "gemini-3.1-flash-lite",
+          "status": 200,
+          "outcome": "ok",
+          "ms": 4767
+        }
+      ],
+      "retrieval_fallback": "vector",
+      "articles": []
+    },
+    {
+      "id": "dev-043",
+      "category": "account_action",
+      "expected_behavior": "handoff",
+      "question": "we're a registered charity, apply the nonprofit discount to my account",
+      "expected_urls": [
+        "https://plausible.io/docs/nonprofit-and-education-pricing"
+      ],
+      "reference_answer": "I can't apply discounts myself, but I can connect you with a human. For eligible nonprofits the process is to contact the team with your organization details and preferred Business tier so they can send a discount code for checkout.",
+      "key_facts": [
+        "The 15% discount is for nonprofits, educational institutions and open-source projects on a Business plan with annual billing",
+        "Contact us with organization name, type, website and preferred Business pageview tier",
+        "Plausible sends a discount code to use at checkout"
+      ],
+      "status": "handoff",
+      "model_status": "handoff",
+      "declined_injection": false,
+      "answer": "To apply for the 15% nonprofit discount, please contact us with your organization name, type, website, and preferred Business pageview tier [1]. You must be choosing a Business plan with annual billing to qualify [1][2]. A member of our support team will need to assist you with this process.",
+      "citations": [
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/nonprofit-and-education-pricing",
+          "quote": "If you meet the eligibility requirements below and are choosing a Business plan with annual billing, contact us with your organization or project name, type, website and preferred Business pageview tier."
+        },
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/nonprofit-and-education-pricing",
+          "quote": "The discount applies to new subscriptions to Business plans with annual billing only."
+        },
+        {
+          "marker": 2,
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/subscription-plans",
+          "quote": "Our 15% discount is available only to nonprofits, educational institutions and open-source projects. It applies to Business plans with annual billing only."
+        }
+      ],
+      "cited_sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/nonprofit-and-education-pricing",
+          "title": "Discount for nonprofits and educational institutions",
+          "heading_path": "Discount for nonprofits and educational institutions",
+          "text": "Our 15% discount is available only to nonprofits, educational institutions and open-source projects choosing a Business plan with annual billing.\n\n## What's included\n\nThe discount is 15% off a Business plan with annual billing. Combined with annual billing, you also get 2 months free.\n\nThe discount applies to new subscriptions to Business plans with annual billing only. Existing subscriptions, monthly payments and all other plans are excluded.\n\nYour discount continues on renewals for as long as you stay on the same plan. If you upgrade or downgrade your plan for any reason, the discount ends and regular prices apply to your new plan.\n\n## How to apply\n\n1. Start your free 30-day trial. No credit card required.\n2. Choose the Business pageview tier you need with annual billing.\n3. If you meet the eligibility requirements below and are choosing a Business plan with annual billing, contact us with your organization or project name, type, website and preferred Business pageview tier.\n4. We'll send you a discount code to use at checkout.\n\n## Who qualifies\n\nOnly nonprofits, educational institutions and open-source projects qualify for this discount. If your organization or project does not fall into one of these categories, it is not eligible."
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/subscription-plans",
+          "title": "Plausible pricing and subscription plans",
+          "heading_path": "Plausible pricing and subscription plans",
+          "text": "Plausible gives you full control over your subscription. Choose a plan, pick monthly or yearly billing and upgrade or downgrade as your needs change. No long-term contracts.\n\n## Which plan should I choose?\n\nAll plans start at the same pageview tiers. The difference is features and team size.\n\n- **Starter**: one site, solo use, no team or sharing needed\n- **Growth**: multiple sites, or need to invite team members, share dashboards with clients or save site segments and site notes for the whole team\n- **Business**: need funnels, user journeys, revenue tracking, custom properties, a consolidated view of several sites, Stats API or Data Studio (build custom dashboards and blend Plausible data with other sources like ad spend or CRM data)\n- **Enterprise**: large scale, SSO, Sites API, managed proxy or raw data exports. Contact us to discuss\n\nCompare full features and pricing on our website or in the **Subscription** section of your settings. Save 2 months by choosing yearly billing.\n\nAll plans include a 30-day free trial, no credit card required. During the trial you have access to all Business plan features and limits, so you can explore the full product before choosing a plan.\n\nNot sure which plan fits? When you choose a plan in your account, the page shows your billable pageviews over the last 30 days, selects the pageview tier that covers them and marks the plan that fits your usage and the features you've been using as **Recommended**. On a trial, it's worth checking near the end, once it covers a full month of your traffic.\n\nOur 15% discount is available only to nonprofits, educational institutions and open-source projects. It applies to Business plans with annual billing only. See nonprofit and education pricing for eligibility and how to apply."
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/nonprofit-and-education-pricing",
+          "similarity": 0.741633415222168
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/billing#how-do-i-add-my-vat-number",
+          "similarity": 0.6429091691970825
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/subscription-plans",
+          "similarity": 0.6354244540758271
+        },
+        {
+          "source_id": "S4",
+          "url": "https://plausible.io/docs/trial-to-paid#add-your-company-address-and-vat-number",
+          "similarity": 0.6138569116592407
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/download-invoices",
+          "similarity": 0.6128424588692923
+        },
+        {
+          "source_id": "S6",
+          "url": "https://plausible.io/docs/billing#why-does-my-subscription-say-enterprise",
+          "similarity": 0.6081394138377733
+        }
+      ],
+      "invalid_citations": [],
+      "removed_sentences": [],
+      "model_citations": 3,
+      "max_similarity": 0.741633415222168,
+      "floor_hit": false,
+      "handoff_offered": true,
+      "handoff_reason": "The customer is requesting to apply a nonprofit discount to their account, which requires manual verification and processing by the support team.",
+      "error": null,
+      "finish_reason": "STOP",
+      "usage": {
+        "generationRequests": 2,
+        "promptTokens": 2652,
+        "outputTokens": 286,
+        "thoughtsTokens": 0,
+        "embeddingTokens": 18
+      },
+      "latency": {
+        "retrievalMs": 37,
+        "generationMs": 5567,
+        "totalMs": 5634,
+        "queueWaitMs": 0
+      },
+      "cost_usd": null,
+      "mode": "live",
+      "prompt_version": "v2",
+      "answered_by": "gemini-3.1-flash-lite",
+      "hops": 1,
+      "attempts": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "status": 503,
+          "outcome": "http_error",
+          "ms": 931
+        },
+        {
+          "model": "gemini-3.1-flash-lite",
+          "status": 200,
+          "outcome": "ok",
+          "ms": 4636
+        }
+      ],
+      "retrieval_fallback": "vector",
+      "articles": []
+    },
+    {
+      "id": "dev-052",
+      "category": "dashboard_metrics",
+      "expected_behavior": "answer",
+      "question": "My checkout flow has 11 steps. Can I put all of them into one funnel?",
+      "expected_urls": [
+        "https://plausible.io/docs/funnel-analysis#you-need-more-than-8-steps",
+        "https://plausible.io/docs/funnel-analysis#how-to-set-up-the-conversion-funnel-analysis"
+      ],
+      "reference_answer": "No, funnels are limited to 8 steps. If your flow is longer, split it into two funnels at a logical midpoint and compare the completion rates to find the bigger drop-off.",
+      "key_facts": [
+        "Funnels are limited to 8 steps",
+        "Split longer flows into two funnels at a logical midpoint"
+      ],
+      "status": "answered",
+      "model_status": "answered",
+      "declined_injection": false,
+      "answer": "Funnels are limited to 8 steps [1]. If your flow is longer, split it into two funnels at a logical midpoint [1].",
+      "citations": [
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/funnel-analysis#you-need-more-than-8-steps",
+          "quote": "Funnels are limited to 8 steps."
+        },
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/funnel-analysis#you-need-more-than-8-steps",
+          "quote": "If your flow is longer, split it into two funnels at a logical midpoint."
+        }
+      ],
+      "cited_sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/funnel-analysis#you-need-more-than-8-steps",
+          "title": "Funnel analysis",
+          "heading_path": "Funnel analysis > Troubleshooting funnels > You need more than 8 steps",
+          "text": "Funnels are limited to 8 steps. If your flow is longer, split it into two funnels at a logical midpoint. For example, an acquisition-to-activation flow can be split into an acquisition funnel (landing page to signup) and an activation funnel (signup to first key action). Compare the two completion rates to find where the bigger drop-off is."
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/funnel-analysis#you-need-more-than-8-steps",
+          "similarity": 0.7767067684706005
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/funnel-analysis#when-to-use-funnel-analysis",
+          "similarity": 0.7248868346214294
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/funnel-analysis#whats-next",
+          "similarity": 0.7103758454322815
+        },
+        {
+          "source_id": "S4",
+          "url": "https://plausible.io/docs/funnel-analysis#funnel-examples",
+          "similarity": 0.698016783535981
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/metrics-definitions#funnels",
+          "similarity": 0.6916844844818115
+        },
+        {
+          "source_id": "S6",
+          "url": "https://plausible.io/docs/funnel-analysis#how-funnel-conversions-are-counted",
+          "similarity": 0.6885071005972359
+        }
+      ],
+      "invalid_citations": [],
+      "removed_sentences": [],
+      "model_citations": 2,
+      "max_similarity": 0.7767067684706005,
+      "floor_hit": false,
+      "handoff_offered": false,
+      "handoff_reason": "",
+      "error": null,
+      "finish_reason": "STOP",
+      "usage": {
+        "generationRequests": 1,
+        "promptTokens": 2170,
+        "outputTokens": 150,
+        "thoughtsTokens": 0,
+        "embeddingTokens": 18
+      },
+      "latency": {
+        "retrievalMs": 31,
+        "generationMs": 5129,
+        "totalMs": 5178,
+        "queueWaitMs": 0
+      },
+      "cost_usd": 0.0010287,
+      "mode": "live",
+      "prompt_version": "v2",
+      "answered_by": "gemini-3.5-flash-lite",
+      "hops": 0,
+      "attempts": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "status": 200,
+          "outcome": "ok",
+          "ms": 5129
+        }
+      ],
+      "retrieval_fallback": "vector",
+      "articles": []
+    },
+    {
+      "id": "dev-057",
+      "category": "install_integrations",
+      "expected_behavior": "answer",
+      "question": "we use nginx but nobody on my team wants to maintain a proxy for analytics. is there a way to have someone else handle it?",
+      "expected_urls": [
+        "https://plausible.io/docs/proxy/guides/nginx",
+        "https://plausible.io/docs/proxy/introduction#managed-proxy-enterprise"
+      ],
+      "reference_answer": "Yes, the managed proxy: you set up a CNAME record pointing to their infrastructure, update the snippet on your site and Plausible takes care of everything else, with no ongoing maintenance. It's available on Enterprise plans, so contact them to discuss.",
+      "key_facts": [
+        "Managed proxy via a CNAME record and an updated snippet",
+        "Plausible handles the rest, no maintenance",
+        "Available on Enterprise plans"
+      ],
+      "status": "answered",
+      "model_status": "answered",
+      "declined_injection": false,
+      "answer": "Yes, we can handle it for you [1]. Our managed proxy lets you send analytics through your own domain name as a first-party connection, and all you need to do is set up a CNAME record using the instructions we'll send you and update the snippet on your site [1].",
+      "citations": [
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/proxy/guides/nginx",
+          "quote": "Don't want to manage your own proxy? We can handle it for you"
+        },
+        {
+          "marker": 1,
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/proxy/guides/nginx",
+          "quote": "Our managed proxy lets you send analytics through your own domain name as a first-party connection. All you need to do is set up a CNAME record using the instructions we'll send you and update the snippet on your site."
+        }
+      ],
+      "cited_sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/proxy/guides/nginx",
+          "title": "Proxying Plausible through Nginx",
+          "heading_path": "Proxying Plausible through Nginx",
+          "text": "If you're already running Nginx as your main web server or reverse proxy, you can also configure it to proxy your analytics. Start by adjusting your configuration as shown in the next step.\n\nTip: Don't want to manage your own proxy? We can handle it for you\nOur managed proxy lets you send analytics through your own domain name as a first-party connection. All you need to do is set up a CNAME record using the instructions we'll send you and update the snippet on your site. We'll take care of everything else. Contact us for details.\n\n## Step 1: Get your snippet\n\nIn the **Site Installation** area of the **General** section in your site settings you can see\nthe snippet specific for your site. It will look similar to the following:\n\n```html\n<script async src=\"https://plausible.io/js/pa-XXXXX.js\"></script>\n<script>\n  window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};\n  plausible.init()\n</script>\n```\n\nYour snippet will have a different script location than the example above. Look for the `https://plausible.io/js/pa-XXXXX.js` part in your snippet - that's the personalized location for your site's script. Mark it down for subsequent steps."
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/proxy/guides/nginx",
+          "similarity": 0.7600838911508384
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/white-label#step-3-set-up-a-proxy-for-better-data-accuracy",
+          "similarity": 0.7354269781454231
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/proxy/introduction",
+          "similarity": 0.7223335835536022
+        },
+        {
+          "source_id": "S4",
+          "url": "https://plausible.io/docs/proxy/guides/cloudflare",
+          "similarity": 0.7209341096321292
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/proxy/guides/nextjs",
+          "similarity": 0.71490045101044
+        },
+        {
+          "source_id": "S6",
+          "url": "https://plausible.io/docs/proxy/guides/nginx#step-2-update-your-nginx-config",
+          "similarity": 0.7148870016668168
+        }
+      ],
+      "invalid_citations": [],
+      "removed_sentences": [],
+      "model_citations": 2,
+      "max_similarity": 0.7600838911508384,
+      "floor_hit": false,
+      "handoff_offered": false,
+      "handoff_reason": "",
+      "error": null,
+      "finish_reason": "STOP",
+      "usage": {
+        "generationRequests": 1,
+        "promptTokens": 3076,
+        "outputTokens": 219,
+        "thoughtsTokens": 0,
+        "embeddingTokens": 31
+      },
+      "latency": {
+        "retrievalMs": 29,
+        "generationMs": 1182,
+        "totalMs": 1222,
+        "queueWaitMs": 0
+      },
+      "cost_usd": 0.00147495,
+      "mode": "live",
+      "prompt_version": "v2",
+      "answered_by": "gemini-3.5-flash-lite",
+      "hops": 0,
+      "attempts": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "status": 200,
+          "outcome": "ok",
+          "ms": 1182
+        }
+      ],
+      "retrieval_fallback": "vector",
+      "articles": []
+    },
+    {
+      "id": "dev-061",
+      "category": "off_topic",
+      "expected_behavior": "abstain",
+      "question": "who won the world cup in 2018",
+      "expected_urls": [],
+      "reference_answer": "Politely say this is outside what you can help with and steer back to Plausible questions.",
+      "key_facts": [],
+      "status": "insufficient",
+      "model_status": null,
+      "declined_injection": false,
+      "answer": "I couldn't find this in the documentation, so I'd rather not guess. Would you like me to connect you with a person from the support team?",
+      "citations": [],
+      "cited_sources": [],
+      "sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/billing#why-did-my-payment-fail",
+          "similarity": 0.48098386767458545
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/transfer-ownership#transfer-a-site-from-a-team-to-your-personal-sites",
+          "similarity": 0.4718288919874698
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/billing#what-payment-methods-do-you-accept",
+          "similarity": 0.47086928871663725
+        },
+        {
+          "source_id": "S4",
+          "url": "https://plausible.io/docs/trial-to-paid#add-your-company-address-and-vat-number",
+          "similarity": 0.4701008638769648
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/stats-api-playground",
+          "similarity": 0.4695897242304603
+        },
+        {
+          "source_id": "S6",
+          "url": "https://plausible.io/docs/countries",
+          "similarity": 0.46945415346187835
+        }
+      ],
+      "invalid_citations": [],
+      "removed_sentences": [],
+      "model_citations": 0,
+      "max_similarity": 0.48098386767458545,
+      "floor_hit": true,
+      "handoff_offered": true,
+      "handoff_reason": "",
+      "error": null,
+      "finish_reason": null,
+      "usage": {
+        "generationRequests": 0,
+        "promptTokens": 0,
+        "outputTokens": 0,
+        "thoughtsTokens": 0,
+        "embeddingTokens": 8
+      },
+      "latency": {
+        "retrievalMs": 21,
+        "generationMs": 0,
+        "totalMs": 21,
+        "queueWaitMs": 0
+      },
+      "cost_usd": 0.0000012,
+      "mode": "live",
+      "prompt_version": "v2",
+      "answered_by": null,
+      "hops": 0,
+      "attempts": [],
+      "retrieval_fallback": "vector",
+      "articles": []
+    },
+    {
+      "id": "dev-063",
+      "category": "off_topic",
+      "expected_behavior": "abstain",
+      "question": "whats a good recipe for banana bread",
+      "expected_urls": [],
+      "reference_answer": "Politely say this is outside what you can help with and steer back to Plausible questions.",
+      "key_facts": [],
+      "status": "insufficient",
+      "model_status": null,
+      "declined_injection": false,
+      "answer": "I couldn't find this in the documentation, so I'd rather not guess. Would you like me to connect you with a person from the support team?",
+      "citations": [],
+      "cited_sources": [],
+      "sources": [
+        {
+          "source_id": "S1",
+          "url": "https://plausible.io/docs/ab-testing",
+          "similarity": 0.5162585819882598
+        },
+        {
+          "source_id": "S2",
+          "url": "https://plausible.io/docs/content-impressions-tracking",
+          "similarity": 0.5128769568874275
+        },
+        {
+          "source_id": "S3",
+          "url": "https://plausible.io/docs/metrics-definitions#conversion-rate-or-cr",
+          "similarity": 0.5111138516000607
+        },
+        {
+          "source_id": "S4",
+          "url": "https://plausible.io/docs/content-impressions-tracking#2-add-the-snippet-to-your-site",
+          "similarity": 0.5108996325195064
+        },
+        {
+          "source_id": "S5",
+          "url": "https://plausible.io/docs/content-impressions-tracking#3-add-the-goals-and-the-property",
+          "similarity": 0.5101841384062693
+        },
+        {
+          "source_id": "S6",
+          "url": "https://plausible.io/docs/buttondown",
+          "similarity": 0.5082013304113557
+        }
+      ],
+      "invalid_citations": [],
+      "removed_sentences": [],
+      "model_citations": 0,
+      "max_similarity": 0.5162585819882598,
+      "floor_hit": true,
+      "handoff_offered": true,
+      "handoff_reason": "",
+      "error": null,
+      "finish_reason": null,
+      "usage": {
+        "generationRequests": 0,
+        "promptTokens": 0,
+        "outputTokens": 0,
+        "thoughtsTokens": 0,
+        "embeddingTokens": 9
+      },
+      "latency": {
+        "retrievalMs": 21,
+        "generationMs": 0,
+        "totalMs": 21,
+        "queueWaitMs": 0
+      },
+      "cost_usd": 0.0000013499999999999998,
+      "mode": "live",
+      "prompt_version": "v2",
+      "answered_by": null,
+      "hops": 0,
+      "attempts": [],
+      "retrieval_fallback": "vector",
+      "articles": []
+    }
+  ]
+}

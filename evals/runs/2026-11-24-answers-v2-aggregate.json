@@ -1,0 +1,306 @@
+{
+  "run": "evals/runs/2026-11-24-answers-v2.json",
+  "judgeModels": [
+    "claude-sonnet"
+  ],
+  "code": {
+    "questions": 71,
+    "behavior": {
+      "overall": {
+        "value": 0.9436619718309859,
+        "lo": 0.8639039411648999,
+        "hi": 0.9778754808520143,
+        "hits": 67,
+        "n": 71
+      },
+      "byExpected": {
+        "answer": {
+          "value": 0.9555555555555556,
+          "lo": 0.8517248911534567,
+          "hi": 0.987725873403887,
+          "hits": 43,
+          "n": 45
+        },
+        "abstain": {
+          "value": 1,
+          "lo": 0.7846891945970195,
+          "hi": 0.9999999999999999,
+          "hits": 14,
+          "n": 14
+        },
+        "handoff": {
+          "value": 0.75,
+          "lo": 0.3006418400969081,
+          "hi": 0.954412739704631,
+          "hits": 3,
+          "n": 4
+        },
+        "decline": {
+          "value": 0.875,
+          "lo": 0.5291118149439162,
+          "hi": 0.9775825088000281,
+          "hits": 7,
+          "n": 8
+        }
+      }
+    },
+    "confusion": {
+      "answer": {
+        "answered": 43,
+        "insufficient": 2,
+        "handoff": 0,
+        "declined": 0,
+        "unavailable": 0
+      },
+      "abstain": {
+        "answered": 0,
+        "insufficient": 14,
+        "handoff": 0,
+        "declined": 0,
+        "unavailable": 0
+      },
+      "handoff": {
+        "answered": 1,
+        "insufficient": 0,
+        "handoff": 3,
+        "declined": 0,
+        "unavailable": 0
+      },
+      "decline": {
+        "answered": 1,
+        "insufficient": 1,
+        "handoff": 0,
+        "declined": 6,
+        "unavailable": 0
+      }
+    },
+    "wrappedInjectionsAnswered": 1,
+    "citations": {
+      "total": 106,
+      "documentPrecision": {
+        "value": 0.9528301886792453,
+        "lo": 0.8943010079830845,
+        "hi": 0.9796859271662907,
+        "hits": 101,
+        "n": 106
+      },
+      "sectionPrecision": {
+        "value": 0.9339622641509434,
+        "lo": 0.8699249597867629,
+        "hi": 0.9676458530647216,
+        "hits": 99,
+        "n": 106
+      }
+    },
+    "quotes": {
+      "returned": 116,
+      "verified": {
+        "value": 1,
+        "lo": 0.9679454930108872,
+        "hi": 1,
+        "hits": 116,
+        "n": 116
+      },
+      "invalidByReason": {}
+    },
+    "removedSentences": {
+      "failedCitation": 0,
+      "unmarkedClaim": 1
+    },
+    "downgradedNoValidCitations": 0,
+    "invalidOutput": 0,
+    "floorHits": {
+      "answer": 0,
+      "abstain": 5,
+      "handoff": 0,
+      "decline": 0
+    },
+    "latencyMs": {
+      "all": {
+        "n": 71,
+        "p50": 1828,
+        "p95": 85491,
+        "max": 152609
+      },
+      "modelCalls": {
+        "n": 66,
+        "p50": 2066,
+        "p95": 98307.5,
+        "max": 152609
+      },
+      "firstAttempt": {
+        "n": 38,
+        "p50": 1317.5,
+        "p95": 3263.7499999999964,
+        "max": 8888
+      }
+    },
+    "retriedAnswers": 28,
+    "queueWaitMs": 121063,
+    "tokens": {
+      "modelCalls": 66,
+      "meanPrompt": 2742.3636363636365,
+      "meanOutput": 197.93939393939394,
+      "meanThoughts": 0
+    },
+    "generationRequests": 127,
+    "availability": {
+      "unavailable": {
+        "value": 0,
+        "lo": 0,
+        "hi": 0.051327952965064906,
+        "hits": 0,
+        "n": 71
+      },
+      "answeredBy": {
+        "gemini-3.5-flash-lite": 66
+      },
+      "hops": {
+        "0": 66
+      },
+      "attemptsByModel": {
+        "gemini-3.5-flash-lite": {
+          "200": 66,
+          "503": 61
+        }
+      },
+      "retrievalFallback": {
+        "vector": 71
+      }
+    },
+    "quoteWords": {
+      "all": {
+        "n": 116,
+        "min": 6,
+        "p25": 16,
+        "median": 20,
+        "p75": 29.25,
+        "max": 60
+      },
+      "valid": {
+        "n": 116,
+        "min": 6,
+        "p25": 16,
+        "median": 20,
+        "p75": 29.25,
+        "max": 60
+      },
+      "over40": 7,
+      "over80": 0
+    },
+    "costUsd": {
+      "meanPerConversation": 0.0012281542253521128,
+      "total": 0.08719895000000001
+    }
+  },
+  "targets": [
+    {
+      "key": "fabricated",
+      "label": "Fabricated answers (answered with unsupported claims)",
+      "value": {
+        "value": 0.022222222222222223,
+        "lo": 0.003933598839322983,
+        "hi": 0.11566681882004808,
+        "hits": 1,
+        "n": 45
+      },
+      "target": "≤ 5%",
+      "met": true
+    },
+    {
+      "key": "idkCorrect",
+      "label": "Correct \"I don't know\" on abstain questions",
+      "value": {
+        "value": 1,
+        "lo": 0.7846891945970195,
+        "hi": 0.9999999999999999,
+        "hits": 14,
+        "n": 14
+      },
+      "target": "≥ 90%",
+      "met": true
+    },
+    {
+      "key": "correctAnswers",
+      "label": "Correct answers on answer questions",
+      "value": {
+        "value": 0.9111111111111111,
+        "lo": 0.7926642454730682,
+        "hi": 0.9648888835177051,
+        "hits": 41,
+        "n": 45
+      },
+      "target": "≥ 85%",
+      "met": true
+    },
+    {
+      "key": "citationsCorrect",
+      "label": "Citations to the correct source (document level)",
+      "value": {
+        "value": 0.9528301886792453,
+        "lo": 0.8943010079830845,
+        "hi": 0.9796859271662907,
+        "hits": 101,
+        "n": 106
+      },
+      "target": "≥ 90%",
+      "met": true
+    },
+    {
+      "key": "latencyP95Ms",
+      "label": "Latency p95",
+      "value": 85491,
+      "target": "≤ 8 s",
+      "met": false
+    }
+  ],
+  "judge": {
+    "answeredJudged": 45,
+    "correctOnAnswered": {
+      "value": 0.9111111111111111,
+      "lo": 0.7926642454730682,
+      "hi": 0.9648888835177051,
+      "hits": 41,
+      "n": 45
+    },
+    "unsupportedClaimsTotal": 1,
+    "completeMean": 1.7555555555555555,
+    "appropriateOnNonAnswered": {
+      "value": 0.8846153846153846,
+      "lo": 0.7102409662092934,
+      "hi": 0.9599675540764081,
+      "hits": 23,
+      "n": 26
+    },
+    "appropriateByExpected": {
+      "answer": {
+        "value": 0,
+        "lo": 0,
+        "hi": 0.6576197760453506,
+        "hits": 0,
+        "n": 2
+      },
+      "abstain": {
+        "value": 1,
+        "lo": 0.7846891945970195,
+        "hi": 0.9999999999999999,
+        "hits": 14,
+        "n": 14
+      },
+      "handoff": {
+        "value": 1,
+        "lo": 0.43850296436068037,
+        "hi": 1,
+        "hits": 3,
+        "n": 3
+      },
+      "decline": {
+        "value": 0.8571428571428571,
+        "lo": 0.486872167860775,
+        "hi": 0.9743203759421759,
+        "hits": 6,
+        "n": 7
+      }
+    }
+  }
+}
