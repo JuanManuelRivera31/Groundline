@@ -29,7 +29,7 @@ async function main(): Promise<void> {
     const plan = await planEmbeddings(cacheStoreFor(db), config.embedding, [question], 'RETRIEVAL_QUERY');
     const e = runtime.embeddingQuota;
     console.log(
-      `Live mode: model chain ${runtime.generationQuotas.map((q) => q.model).join(' → ')}, budget ${config.generation.liveBudgetMs} ms. ` +
+      `Live mode: model chain ${runtime.generationQuotas.map((q) => q.model).join(' → ')}, budget ${config.generation.liveBudgetMs} ms, hedge after ${config.generation.hedgeAfterMs} ms. ` +
         'Generation requests: up to 1 per model (0 if below the floor).',
     );
     for (const q of runtime.generationQuotas) console.log(`  remaining today (${q.model}): ${q.remaining} of ${q.limit}`);
@@ -49,15 +49,15 @@ async function main(): Promise<void> {
     if (r.articles.length > 0) console.log(`Articles (${r.retrievalFallback}): ${r.articles.map((a) => a.url).join(', ')}`);
     if (r.error) console.log(`Note: ${r.error}`);
     console.log(
-      `Answered by: ${r.answeredBy ?? 'none'} | hops ${r.hops} | retrieval ${r.retrievalFallback} | attempts: ` +
-        (r.attempts.map((a) => `${a.model}:${a.status ?? a.outcome} ${a.ms} ms`).join(', ') || 'none'),
+      `Answered by: ${r.answeredBy ?? 'none'} | hops ${r.hops}${r.hedged ? ' (hedged)' : ''} | retrieval ${r.retrievalFallback} | attempts: ` +
+        (r.attempts.map((a) => `${a.model}:${a.outcome === 'cancelled' ? 'cancelled' : (a.status ?? a.outcome)} ${a.ms} ms`).join(', ') || 'none'),
     );
     console.log(
       `\nMax similarity ${r.maxSimilarity.toFixed(4)} vs floor ${runtime.deps.config.floor.toFixed(3)}${r.floorHit ? ' (floor hit: model not called)' : ''}` +
         ` | prompt ${r.promptVersion}`,
     );
     console.log(
-      `Latency ${(r.latency.totalMs / 1000).toFixed(2)} s (retrieval ${r.latency.retrievalMs} ms, generation ${r.latency.generationMs} ms, queue ${r.latency.queueWaitMs} ms)` +
+      `Latency ${(r.latency.totalMs / 1000).toFixed(2)} s (retrieval ${r.latency.retrievalMs} ms incl. embedding ${r.latency.embeddingMs ?? 0} ms, generation ${r.latency.generationMs} ms, queue ${r.latency.queueWaitMs} ms)` +
         ` | tokens prompt ${r.usage.promptTokens}, output ${r.usage.outputTokens}, thoughts ${r.usage.thoughtsTokens}` +
         ` | equivalent cost ${r.costUsd === null ? 'n/a' : `$${r.costUsd.toFixed(6)}`} (free tier: $0)`,
     );

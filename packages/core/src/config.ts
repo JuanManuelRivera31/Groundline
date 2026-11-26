@@ -34,6 +34,8 @@ export interface GenerationConfig {
   readonly modelsWithDefaultLimits: readonly string[];
   /** Live mode: time budget per answer, retrieval included. */
   readonly liveBudgetMs: number;
+  /** Live mode: start the next chain model in parallel after this many ms without an answer (0 = no hedge). */
+  readonly hedgeAfterMs: number;
   /** 0–0.2: answers must be deterministic and grounded. */
   readonly temperature: number;
   readonly maxOutputTokens: number;
@@ -85,6 +87,8 @@ export const DEFAULTS = {
   GEN_LIMITS: '',
   // 7.5 s leaves a network margin under the 8 s time-to-response target (ADR-0010, S5c).
   GEN_LIVE_BUDGET_MS: 7500,
+  // Live hedge: the fallback starts in parallel when the primary is silent this long (ADR-0009, S5d).
+  HEDGE_AFTER_MS: 3000,
   ANSWER_PROMPT_VERSION: 'v4',
   GEN_TEMPERATURE: '0',
   GEN_MAX_OUTPUT_TOKENS: 1024,
@@ -200,6 +204,7 @@ export function parseConfig(env: EnvRecord): AppConfig {
     limitsByModel,
     modelsWithDefaultLimits,
     liveBudgetMs: int('GEN_LIVE_BUDGET_MS', 1000, 120_000),
+    hedgeAfterMs: int('HEDGE_AFTER_MS', 0, 120_000),
     temperature: decimal('GEN_TEMPERATURE', 0, 0.2),
     maxOutputTokens: int('GEN_MAX_OUTPUT_TOKENS', 64, 8192),
     thinkingLevel: thinking === 'OFF' ? undefined : thinking,

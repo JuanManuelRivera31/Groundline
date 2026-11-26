@@ -31,6 +31,7 @@ describe('parseConfig', () => {
       model: 'gemini-3.5-flash-lite',
       models: ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
       liveBudgetMs: 7500,
+      hedgeAfterMs: 3000,
       modelsWithDefaultLimits: ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
       temperature: 0,
       maxOutputTokens: 1024,
@@ -49,6 +50,8 @@ describe('parseConfig', () => {
     expect(config.generation.limitsByModel).toEqual({ a: { rpm: 5, tpm: 1000, rpd: 50 }, b: { rpm: 2, tpm: 500, rpd: 20 } });
     expect(config.generation.limits).toEqual({ rpm: 5, tpm: 1000, rpd: 50 });
     expect(config.generation.liveBudgetMs).toBe(5000);
+    expect(parseConfig({ HEDGE_AFTER_MS: '0' }).generation.hedgeAfterMs).toBe(0);
+    expect(() => parseConfig({ HEDGE_AFTER_MS: '-1' })).toThrow(ConfigError);
     expect(generationLimitDefaults(config)).toEqual([]);
     const partial = parseConfig({ GEN_MODELS: 'a,b', GEN_LIMITS: 'a=5/1000/50' });
     expect(partial.generation.limitsByModel.b).toEqual({ rpm: 10, tpm: 100_000, rpd: 200 });

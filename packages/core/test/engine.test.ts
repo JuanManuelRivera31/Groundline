@@ -9,7 +9,7 @@ import type { AnswerSource, ModelAnswer, RetrievedChunk } from '../src/answer/ty
 import { DEFAULT_RETRY_POLICY } from '../src/embeddings/retry.ts';
 import { GenerationApiError, type GenerateResult, type GenerationClient } from '../src/generation/types.ts';
 import { RateLimiter, RateLimitWaitError } from '../src/ratelimit/limiter.ts';
-import { fakeTime } from './helpers.ts';
+import { fakeScheduler, fakeTime } from './helpers.ts';
 
 const chunk = (chunkId: number, url: string, ord: number, cosine: number | null, content = `content ${chunkId}`): RetrievedChunk => ({
   chunkId,
@@ -99,6 +99,13 @@ function setup(chain: (t: Time) => GenerationClient[], over: Partial<AnswerEngin
       },
     },
     timeoutSignal: () => new AbortController().signal,
+    // Hedge timers never fire with the instant fake clock; the hedge tests use fakeScheduler.
+    wait: (_ms, signal) =>
+      new Promise((resolve) => {
+        signal.addEventListener('abort', () => {
+          resolve();
+        }, { once: true });
+      }),
     ...rest,
   };
   return { deps, usage, t };
@@ -418,5 +425,181 @@ describe('answerQuestion — live mode', () => {
       expect(seen).toEqual([8000]);
       expect(result).toMatchObject({ status: 'answered', retrievalFallback: 'vector' });
     });
+  });
+});
+
+describe('answerQuestion — live hedge (S5d)', () => {
+  type Plan = { readonly ms: number; readonly text: string } | { readonly ms: number; readonly error: () => Error } | 'hang';
+  type Sched = ReturnType<typeof fakeScheduler>;
+
+  /** Client on simulated time: answers or fails after `ms`, or hangs until its signal aborts (like fetch). */
+  function timedClient(model: string, s: Sched, plan: Plan): GenerationClient & { calls: number; aborted: number } {
+    const c = {
+      model,
+      calls: 0,
+      aborted: 0,
+      generate: (req: { signal?: AbortSignal | undefined }): Promise<GenerateResult> => {
+        c.calls++;
+        return new Promise((resolve, reject) => {
+          const signal = req.signal;
+          const onAbort = (): void => {
+            c.aborted++;
+            reject(new GenerationApiError('Gemini generate request timed out (live budget).', { status: 0, retryable: true, timeout: true }));
+          };
+          if (signal?.aborted) {
+            onAbort();
+            return;
+          }
+          signal?.addEventListener('abort', onAbort, { once: true });
+          if (plan === 'hang') return;
+          void s.wait(plan.ms, signal).then(() => {
+            if (signal?.aborted) return;
+            signal?.removeEventListener('abort', onAbort);
+            if ('text' in plan) {
+              resolve({ text: plan.text, finishReason: 'STOP', usage: { promptTokens: 1000, outputTokens: 100, thoughtsTokens: 0, totalTokens: 1100 }, observedHeaders: {} });
+            } else reject(plan.error());
+          });
+        });
+      },
+    };
+    return c;
+  }
+
+  function hedgeSetup(plans: readonly Plan[], over: { hedgeAfterMs?: number; embedMs?: number } = {}) {
+    const s = fakeScheduler();
+    const usage: { model: string; httpStatus: number; latencyMs: number | undefined }[] = [];
+    const clients = plans.map((p, i) => timedClient(`m${i + 1}`, s, p));
+    const deps: AnswerEngineDeps = {
+      mode: 'live',
+      config: {
+        candidates: 20,
+        sources: 6,
+        floor: 0.6,
+        embeddingModel: 'gemini-embedding-001',
+        maxOutputTokens: 1024,
+        liveBudgetMs: 7500,
+        hedgeAfterMs: over.hedgeAfterMs ?? 3000,
+      },
+      embedQuery: async () => {
+        if (over.embedMs) await s.wait(over.embedMs);
+        return [1, 0];
+      },
+      retrieve: () => Promise.resolve(ranked),
+      chain: clients.map((c) => ({ client: c, limiter: new RateLimiter({ limits, clock: s.clock, sleep: s.sleep }) })),
+      retry: DEFAULT_RETRY_POLICY,
+      sleep: s.sleep,
+      random: () => 0,
+      clock: s.clock,
+      usage: {
+        record: (e) => {
+          usage.push({ model: e.model, httpStatus: e.httpStatus, latencyMs: e.latencyMs });
+          return Promise.resolve();
+        },
+      },
+      timeoutSignal: s.timeoutSignal,
+      wait: s.wait,
+    };
+    return { deps, usage, clients };
+  }
+
+  const tuple = (r: Awaited<ReturnType<typeof answerQuestion>>) => r.attempts.map((a) => [a.model, a.status, a.outcome, a.ms]);
+
+  it('primary hung: the fallback starts after 3 s, wins, and the primary call is aborted and recorded', async () => {
+    const h = hedgeSetup(['hang', { ms: 1000, text: reply() }]);
+    const result = await answerQuestion(h.deps, 'q');
+    expect(result).toMatchObject({ status: 'answered', answeredBy: 'm2', hedged: true, hops: 1, error: null });
+    expect(result.latency.totalMs).toBe(4000);
+    expect(tuple(result)).toEqual([
+      ['m2', 200, 'ok', 1000],
+      ['m1', 0, 'cancelled', 4000],
+    ]);
+    expect(h.usage).toEqual([
+      { model: 'm2', httpStatus: 200, latencyMs: 1000 },
+      { model: 'm1', httpStatus: 0, latencyMs: 4000 },
+    ]);
+    expect(h.clients[0]?.aborted).toBe(1);
+  });
+
+  it('primary slow but ahead of the fallback: the primary wins and the hedged call is cancelled', async () => {
+    const h = hedgeSetup([
+      { ms: 3500, text: reply() },
+      { ms: 2000, text: reply() },
+    ]);
+    const result = await answerQuestion(h.deps, 'q');
+    expect(result).toMatchObject({ status: 'answered', answeredBy: 'm1', hedged: true, hops: 1 });
+    expect(result.latency.totalMs).toBe(3500);
+    expect(tuple(result)).toEqual([
+      ['m1', 200, 'ok', 3500],
+      ['m2', 0, 'cancelled', 500],
+    ]);
+    expect(h.usage.map((u) => [u.model, u.httpStatus])).toEqual([
+      ['m1', 200],
+      ['m2', 0],
+    ]);
+  });
+
+  it('both models hung: unavailable with articles, ending exactly at the 7.5 s budget', async () => {
+    const h = hedgeSetup(['hang', 'hang']);
+    const result = await answerQuestion(h.deps, 'q');
+    expect(result).toMatchObject({ status: 'unavailable', answeredBy: null, hedged: true, hops: 1, handoffOffered: true });
+    expect(result.latency.totalMs).toBe(7500);
+    expect(tuple(result)).toEqual([
+      ['m1', 0, 'timeout', 7500],
+      ['m2', 0, 'timeout', 4500],
+    ]);
+    expect(result.articles.length).toBeGreaterThan(0);
+    expect(h.usage).toHaveLength(2);
+  });
+
+  it('an immediate 503 on the primary switches at once, without waiting for the hedge', async () => {
+    const h = hedgeSetup([
+      { ms: 200, error: overloaded },
+      { ms: 1000, text: reply() },
+    ]);
+    const result = await answerQuestion(h.deps, 'q');
+    expect(result).toMatchObject({ status: 'answered', answeredBy: 'm2', hedged: false, hops: 1 });
+    expect(result.latency.totalMs).toBe(1200);
+    expect(tuple(result)).toEqual([
+      ['m1', 503, 'http_error', 200],
+      ['m2', 200, 'ok', 1000],
+    ]);
+  });
+
+  it('keeps waiting for the hedged call when the first response is not valid output', async () => {
+    const h = hedgeSetup([
+      { ms: 3500, text: 'not json' },
+      { ms: 1500, text: reply() },
+    ]);
+    const result = await answerQuestion(h.deps, 'q');
+    expect(result).toMatchObject({ status: 'answered', answeredBy: 'm2', hedged: true });
+    expect(result.latency.totalMs).toBe(4500);
+  });
+
+  it('falls back to the invalid response (insufficient) when the hedged call fails too', async () => {
+    const h = hedgeSetup([
+      { ms: 3500, text: 'not json' },
+      { ms: 1500, error: overloaded },
+    ]);
+    const result = await answerQuestion(h.deps, 'q');
+    expect(result).toMatchObject({ status: 'insufficient', answeredBy: 'm1', hedged: true, error: 'invalid_output: response is not valid JSON' });
+  });
+
+  it('HEDGE_AFTER_MS 0 keeps the sequential chain: a hung primary uses the whole budget', async () => {
+    const h = hedgeSetup(['hang', { ms: 1000, text: reply() }], { hedgeAfterMs: 0 });
+    const result = await answerQuestion(h.deps, 'q');
+    expect(result).toMatchObject({ status: 'unavailable', hedged: false, error: 'live_budget_exhausted' });
+    expect(result.attempts.map((a) => [a.model, a.outcome])).toEqual([
+      ['m1', 'timeout'],
+      ['m2', 'budget'],
+    ]);
+    expect(h.clients[1]?.calls).toBe(0);
+  });
+
+  it('records the query embedding time separately and counts it against the budget', async () => {
+    const h = hedgeSetup(['hang', 'hang'], { embedMs: 800 });
+    const result = await answerQuestion(h.deps, 'q');
+    expect(result.latency.embeddingMs).toBe(800);
+    expect(result.latency.retrievalMs).toBe(800);
+    expect(result.latency.totalMs).toBe(7500);
   });
 });

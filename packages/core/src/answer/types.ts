@@ -16,7 +16,8 @@ export interface GenerationAttempt {
   readonly model: string;
   /** HTTP status; 0 for network/timeout; null when skipped locally (quota or rate window). */
   readonly status: number | null;
-  readonly outcome: 'ok' | 'http_error' | 'timeout' | 'network' | 'quota_local' | 'rate_local' | 'budget';
+  /** cancelled: aborted by the engine because a hedged call to another model answered first. */
+  readonly outcome: 'ok' | 'http_error' | 'timeout' | 'network' | 'quota_local' | 'rate_local' | 'budget' | 'cancelled';
   readonly ms: number;
 }
 
@@ -102,8 +103,11 @@ export interface AnswerUsage {
 
 export interface AnswerLatency {
   readonly retrievalMs: number;
+  /** Query embedding step (cache lookup or live call), included in retrievalMs. Absent in runs before S5d. */
+  readonly embeddingMs?: number | undefined;
+  /** Generation phase. Live mode: wall time, excluding limiter queue wait (hedged calls overlap). */
   readonly generationMs: number;
-  /** retrieval + generation + validation; excludes limiter queue wait. */
+  /** retrieval + generation + validation; eval mode excludes limiter queue wait, live mode includes it. */
   readonly totalMs: number;
   readonly queueWaitMs: number;
 }
@@ -124,8 +128,10 @@ export interface AnswerResult {
   readonly mode: AnswerMode;
   /** Model that produced the validated answer (null if none did). */
   readonly answeredBy: string | null;
-  /** Model switches in the chain (live mode); 0 in eval mode. */
+  /** Chain models started minus one (live mode); 0 in eval mode. */
   readonly hops: number;
+  /** Live mode: a second model was started in parallel because the first had not answered in time. */
+  readonly hedged: boolean;
   readonly attempts: readonly GenerationAttempt[];
   /** "vector" normally; "fts"/"none" when the live query embedding failed. */
   readonly retrievalFallback: RetrievalFallback;

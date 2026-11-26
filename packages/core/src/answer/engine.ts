@@ -32,8 +32,14 @@ export interface AnswerEngineConfig {
   readonly embeddingModel: string;
   readonly maxOutputTokens: number;
   readonly promptVersion?: string | undefined;
-  /** Live mode: time budget per answer, retrieval included (default 8 000 ms). */
+  /** Live mode: time budget per answer, retrieval included (default 7 500 ms). */
   readonly liveBudgetMs?: number | undefined;
+  /**
+   * Live mode: when the model in flight has not answered after this many ms, start
+   * the next chain model in parallel and keep the first valid answer (0 = no hedge).
+   * Default 3 000 ms (ADR-0009, amendment S5d).
+   */
+  readonly hedgeAfterMs?: number | undefined;
   readonly quoteBounds?: QuoteBounds | undefined;
 }
 
@@ -68,12 +74,15 @@ export interface AnswerEngineDeps {
   readonly usage: UsageRecorder;
   /** Creates an abort signal for live calls (default AbortSignal.timeout). */
   readonly timeoutSignal?: ((ms: number) => AbortSignal) | undefined;
+  /** Resolves after `ms`, or as soon as `signal` aborts (live hedge timer). Default setTimeout. */
+  readonly wait?: ((ms: number, signal: AbortSignal) => Promise<void>) | undefined;
   readonly prices?: Readonly<Record<string, ModelPrice>> | undefined;
   /** Usage kind for api_usage rows (default "generate"). */
   readonly usageKind?: string | undefined;
 }
 
 export const DEFAULT_LIVE_BUDGET_MS = 7_500;
+export const DEFAULT_HEDGE_AFTER_MS = 3_000;
 /** Below this remaining time a new live attempt is not started. */
 export const MIN_ATTEMPT_MS = 300;
 const ARTICLES = 3;
@@ -99,6 +108,7 @@ interface GenerationRun {
   readonly queueWaitMs: number;
   readonly callMs: number;
   readonly hops: number;
+  readonly hedged: boolean;
   readonly error: string | null;
 }
 
@@ -134,6 +144,7 @@ export async function answerQuestion(deps: AnswerEngineDeps, question: string): 
 
   // 1. Query embedding. In live mode a failure degrades to full-text articles.
   let vector: readonly number[];
+  const embedStart = clock.now();
   try {
     vector = await deps.embedQuery(question, { mode, timeoutMs: mode === 'live' ? remaining() : undefined });
   } catch (error) {
@@ -154,14 +165,17 @@ export async function answerQuestion(deps: AnswerEngineDeps, question: string): 
       floorHit: false,
       answeredBy: null,
       hops: 0,
+      hedged: false,
       attempts: [],
       retrievalFallback: fallback,
       articles,
       usage: { generationRequests: 0, promptTokens: 0, outputTokens: 0, thoughtsTokens: 0, embeddingTokens },
-      latency: { retrievalMs: totalMs, generationMs: 0, totalMs, queueWaitMs: 0 },
+      latency: { retrievalMs: totalMs, embeddingMs: clock.now() - embedStart, generationMs: 0, totalMs, queueWaitMs: 0 },
       generationModel: primary.client.model,
     });
   }
+
+  const embeddingMs = clock.now() - embedStart;
 
   // 2. Retrieval and floor.
   const ranked = await deps.retrieve(question, vector, config.candidates);
@@ -177,10 +191,11 @@ export async function answerQuestion(deps: AnswerEngineDeps, question: string): 
       ...common,
       answeredBy: null,
       hops: 0,
+      hedged: false,
       attempts: [],
       articles: [],
       usage: { generationRequests: 0, promptTokens: 0, outputTokens: 0, thoughtsTokens: 0, embeddingTokens },
-      latency: { retrievalMs, generationMs: 0, totalMs, queueWaitMs: 0 },
+      latency: { retrievalMs, embeddingMs, generationMs: 0, totalMs, queueWaitMs: 0 },
       generationModel: primary.client.model,
     });
   }
@@ -190,7 +205,13 @@ export async function answerQuestion(deps: AnswerEngineDeps, question: string): 
   const estTokens = estimateTokens(prompt.system) + estimateTokens(user);
   const request = { system: prompt.system, user, responseSchema: prompt.responseSchema(sources.map((s) => s.id)) };
   const cost = { requests: 1, tokens: Math.ceil(estTokens * 1.2) + config.maxOutputTokens };
-  const run = mode === 'eval' ? await generateEval(deps, primary, request, cost, estTokens) : await generateLive(deps, request, cost, estTokens, remaining);
+  // A response the policy can use: complete JSON that matches the schema (the live hedge keeps the first one).
+  const acceptable = (r: GenerateResult): boolean => r.finishReason === 'STOP' && parseModelAnswer(r.text, prompt.markerStyle).ok;
+  const hedgeAfterMs = config.hedgeAfterMs ?? DEFAULT_HEDGE_AFTER_MS;
+  const run =
+    mode === 'eval'
+      ? await generateEval(deps, primary, request, cost, estTokens)
+      : await generateLive(deps, request, cost, estTokens, remaining, hedgeAfterMs, acceptable);
 
   const usage = {
     generationRequests: run.attempts.filter((a) => a.status !== null).length,
@@ -228,10 +249,11 @@ export async function answerQuestion(deps: AnswerEngineDeps, question: string): 
     finishReason: run.result?.finishReason ?? null,
     answeredBy: run.result ? run.model : null,
     hops: run.hops,
+    hedged: run.hedged,
     attempts: run.attempts,
     articles,
     usage,
-    latency: { retrievalMs, generationMs: run.callMs, totalMs, queueWaitMs: run.queueWaitMs },
+    latency: { retrievalMs, embeddingMs, generationMs: run.callMs, totalMs, queueWaitMs: run.queueWaitMs },
     generationModel: run.model ?? primary.client.model,
   });
 }
@@ -314,13 +336,54 @@ async function generateEval(
       await record(deps, model, estTokens, attempt.status, attempt.durationMs, attempt.result);
     },
   );
-  return { result: call.result, model, attempts, queueWaitMs: call.queueWaitMs, callMs: call.callMs, hops: 0, error: null };
+  return { result: call.result, model, attempts, queueWaitMs: call.queueWaitMs, callMs: call.callMs, hops: 0, hedged: false, error: null };
 }
 
+/** Abortable timer on the global setTimeout (Node and Workers). */
+function timerWait(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const done = (): void => {
+      clearTimeout(id);
+      signal.removeEventListener('abort', done);
+      resolve();
+    };
+    const id = setTimeout(done, Math.max(0, ms));
+    signal.addEventListener('abort', done, { once: true });
+  });
+}
+
+/** One chain model started in live mode. */
+interface Lane {
+  readonly model: string;
+  readonly launchedAt: number;
+  readonly controller: AbortController;
+  /** Set before the engine aborts a lane whose result is no longer needed. */
+  cancelled: boolean;
+}
+
+/** How a lane ended: an HTTP 200 result, or the error that ended it (null when cancelled). */
+interface LaneEnd {
+  readonly lane: Lane;
+  readonly result: GenerateResult | null;
+  readonly error: string | null;
+}
+
+const HEDGE = Symbol('hedge');
+
+/** Read through a function: the flag changes while a lane awaits, so it must not be narrowed. */
+const isCancelled = (lane: Lane): boolean => lane.cancelled;
+
 /**
- * Live mode: walk the model chain within the remaining budget. 503/5xx,
- * timeouts and network errors switch to the next model at once; a 429 waits
- * for its retryDelay and retries the same model once only if that fits.
+ * Live mode: walk the model chain within the remaining budget (ADR-0009, amendment S5d).
+ * - 503/5xx, timeouts and network errors switch to the next model at once; a 429
+ *   waits for its retryDelay and retries the same model once only if that fits.
+ * - Hedge: when the newest model in flight has not answered after `hedgeAfterMs`,
+ *   the next model starts in parallel. The first acceptable answer wins; the other
+ *   call is aborted and recorded as "cancelled". Every call ends by the deadline.
  */
 async function generateLive(
   deps: AnswerEngineDeps,
@@ -328,60 +391,132 @@ async function generateLive(
   cost: { requests: number; tokens: number },
   estTokens: number,
   remaining: () => number,
+  hedgeAfterMs: number,
+  acceptable: (result: GenerateResult) => boolean,
 ): Promise<GenerationRun> {
+  const { clock } = deps;
   const attempts: GenerationAttempt[] = [];
   const signalFor = deps.timeoutSignal ?? ((ms: number) => AbortSignal.timeout(ms));
-  let callMs = 0;
+  const wait = deps.wait ?? timerWait;
+  const phaseStart = clock.now();
   let queueWaitMs = 0;
   let lastError: string | null = null;
-  let modelsTried = 0;
+  let next = 0;
+  let launched = 0;
+  let hedged = false;
+  const inFlight = new Map<Lane, Promise<LaneEnd>>();
+  let newest: Lane | null = null;
 
-  for (const target of deps.chain) {
-    const model = target.client.model;
-    if (remaining() < MIN_ATTEMPT_MS) {
-      attempts.push({ model, status: null, outcome: 'budget', ms: 0 });
-      lastError = 'live_budget_exhausted';
-      break;
-    }
-    modelsTried++;
+  const runLane = async (target: GenerationTarget, lane: Lane): Promise<LaneEnd> => {
+    const model = lane.model;
     let retried429 = false;
     for (;;) {
-      const queued = deps.clock.now();
+      const queued = clock.now();
       try {
         await target.limiter.acquire(cost, { maxWaitMs: Math.max(0, remaining() - MIN_ATTEMPT_MS) });
       } catch (error) {
         if (!(error instanceof QuotaExceededError || error instanceof RateLimitWaitError)) throw error;
         attempts.push({ model, status: null, outcome: error instanceof QuotaExceededError ? 'quota_local' : 'rate_local', ms: 0 });
-        lastError = error.message;
-        break;
+        return { lane, result: null, error: error.message };
       }
-      queueWaitMs += deps.clock.now() - queued;
-      const started = deps.clock.now();
-      const timeLeft = Math.max(1, remaining());
+      queueWaitMs += clock.now() - queued;
+      if (isCancelled(lane)) return { lane, result: null, error: null };
+      const started = clock.now();
+      // The budget deadline aborts this call; so does the engine when another lane wins.
+      const budget = signalFor(Math.max(1, remaining()));
+      const onBudget = (): void => {
+        lane.controller.abort(budget.reason);
+      };
+      if (budget.aborted) onBudget();
+      else budget.addEventListener('abort', onBudget, { once: true });
       try {
-        const result = await target.client.generate({ ...request, signal: signalFor(timeLeft) });
-        const ms = deps.clock.now() - started;
-        callMs += ms;
+        const result = await target.client.generate({ ...request, signal: lane.controller.signal });
+        const ms = clock.now() - started;
         attempts.push({ model, status: 200, outcome: 'ok', ms });
         await record(deps, model, estTokens, 200, ms, result);
-        return { result, model, attempts, queueWaitMs, callMs, hops: modelsTried - 1, error: null };
+        return { lane, result, error: null };
       } catch (error) {
-        const ms = deps.clock.now() - started;
-        callMs += ms;
+        const ms = clock.now() - started;
         const status = error instanceof GeminiApiError ? error.status : 0;
-        attempts.push({ model, status, outcome: attemptOutcome(error), ms });
+        attempts.push({ model, status, outcome: isCancelled(lane) ? 'cancelled' : attemptOutcome(error), ms });
         await record(deps, model, estTokens, status, ms);
-        lastError = error instanceof Error ? error.message : String(error);
+        if (isCancelled(lane)) return { lane, result: null, error: null };
         const retryAfter = error instanceof GeminiApiError ? error.retryAfterMs : undefined;
         if (status === 429 && !retried429 && retryAfter !== undefined && retryAfter + MIN_ATTEMPT_MS < remaining()) {
           retried429 = true;
           await deps.sleep(retryAfter);
-          callMs += retryAfter;
           continue;
         }
-        break; // 503/5xx/timeout/network/4xx: next model
+        // 503/5xx/timeout/network/4xx: the engine moves to the next model.
+        return { lane, result: null, error: error instanceof Error ? error.message : String(error) };
+      } finally {
+        budget.removeEventListener('abort', onBudget);
       }
     }
+  };
+
+  /** Starts the next chain model; false when none is left or the budget is used up. */
+  const launch = (): boolean => {
+    const target = deps.chain[next];
+    if (!target) return false;
+    next++;
+    if (remaining() < MIN_ATTEMPT_MS) {
+      attempts.push({ model: target.client.model, status: null, outcome: 'budget', ms: 0 });
+      lastError = 'live_budget_exhausted';
+      next = deps.chain.length;
+      return false;
+    }
+    launched++;
+    const lane: Lane = { model: target.client.model, launchedAt: clock.now(), controller: new AbortController(), cancelled: false };
+    inFlight.set(lane, runLane(target, lane));
+    newest = lane;
+    return true;
+  };
+
+  let winner: LaneEnd | null = null;
+  /** First complete but unusable response: kept only if no lane in flight does better (no retry on bad output). */
+  let held: LaneEnd | null = null;
+  launch();
+  try {
+    while (inFlight.size > 0) {
+      const racers: Promise<LaneEnd | typeof HEDGE>[] = [...inFlight.values()];
+      const timer = new AbortController();
+      // `newest` is set inside launch(); the cast stops TypeScript from narrowing it to null.
+      const hedgeFrom = newest as Lane | null;
+      if (hedgeAfterMs > 0 && held === null && next < deps.chain.length && hedgeFrom) {
+        const delay = Math.max(0, hedgeFrom.launchedAt + hedgeAfterMs - clock.now());
+        if (remaining() - delay >= MIN_ATTEMPT_MS) racers.push(wait(delay, timer.signal).then(() => HEDGE));
+      }
+      const settled = await Promise.race(racers);
+      timer.abort();
+      if (settled === HEDGE) {
+        if (launch()) hedged = true;
+        continue;
+      }
+      inFlight.delete(settled.lane);
+      if (settled.result) {
+        if (acceptable(settled.result)) {
+          winner = settled;
+          break;
+        }
+        held ??= settled;
+        continue;
+      }
+      if (settled.error !== null) lastError = settled.error;
+      if (inFlight.size === 0 && held === null) launch();
+    }
+  } finally {
+    const losers = [...inFlight.keys()];
+    for (const lane of losers) {
+      lane.cancelled = true;
+      lane.controller.abort();
+    }
+    await Promise.allSettled([...inFlight.values()]);
   }
-  return { result: null, model: null, attempts, queueWaitMs, callMs, hops: Math.max(0, modelsTried - 1), error: lastError };
+
+  const chosen = winner ?? held;
+  const callMs = clock.now() - phaseStart - queueWaitMs;
+  const hops = Math.max(0, launched - 1);
+  if (chosen?.result) return { result: chosen.result, model: chosen.lane.model, attempts, queueWaitMs, callMs, hops, hedged, error: null };
+  return { result: null, model: null, attempts, queueWaitMs, callMs, hops, hedged, error: lastError };
 }
