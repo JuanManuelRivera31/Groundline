@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
   aggregate,
+  arrivalOffsets,
   behaviorCorrect,
   computeCodeMetrics,
   judgeItemFromRecord,
+  liveSummary,
   parseCsv,
   parseExternalAnswers,
+  proportion,
   validateJudgments,
   type AnswerRecord,
   type JudgeItem,
 } from '../src/answers.ts';
+import { mulberry32 } from '@groundline/core';
 import { calibrateFloor, floorSensitivity, type SimilarityRow } from '../src/floor.ts';
 import type { Category, ExpectedBehavior } from '../src/schema.ts';
 
@@ -150,6 +154,33 @@ describe('computeCodeMetrics', () => {
   });
 });
 
+describe('live time and availability summary', () => {
+  it('times every response but only model-delivered ones for delivered latency', () => {
+    const lat = (totalMs: number) => ({ retrievalMs: 10, generationMs: totalMs - 10, totalMs, queueWaitMs: 0 });
+    const m = computeCodeMetrics([
+      record('d1', 'answer', 'answered', { mode: 'live', answered_by: 'm1', latency: lat(2000) }),
+      record('d2', 'abstain', 'insufficient', { mode: 'live', answered_by: 'm2', latency: lat(3000) }),
+      record('f1', 'abstain', 'insufficient', { mode: 'live', answered_by: null, floor_hit: true, latency: lat(20) }),
+      record('u1', 'answer', 'unavailable', { mode: 'live', answered_by: null, latency: lat(7520) }),
+    ]);
+    expect(m.latencyMs.delivered).toMatchObject({ n: 2, max: 3000 });
+    expect(m.latencyMs.all).toMatchObject({ n: 4, max: 7520 });
+    expect(liveSummary(m)).toMatchObject({ n: 4, deliveredN: 2, responseP95Ms: m.latencyMs.all.p95, unavailable: { hits: 1, n: 4 } });
+  });
+});
+
+describe('arrivalOffsets', () => {
+  it('is deterministic, starts at 0, never goes back in time and has the requested mean gap', () => {
+    const a = arrivalOffsets(30, 12_000, mulberry32(20261125));
+    expect(a).toEqual(arrivalOffsets(30, 12_000, mulberry32(20261125)));
+    expect(a[0]).toBe(0);
+    for (let i = 1; i < a.length; i++) expect(a[i]).toBeGreaterThanOrEqual(a[i - 1] ?? 0);
+    const many = arrivalOffsets(20_001, 12_000, mulberry32(7));
+    expect((many.at(-1) ?? 0) / 20_000).toBeGreaterThan(11_500);
+    expect((many.at(-1) ?? 0) / 20_000).toBeLessThan(12_500);
+  });
+});
+
 describe('availability and quote-length metrics', () => {
   it('counts unavailable, answering models, hops, attempts and fallbacks; tolerates S3 records', () => {
     const m = computeCodeMetrics([
@@ -232,20 +263,40 @@ describe('judgments and aggregate', () => {
 
   it('computes the target metrics', () => {
     const { judgments } = validateJudgments(items, good);
-    const result = aggregate(items, judgments, computeCodeMetrics(records), { p95Ms: 9100, n: 12 });
+    const live = { n: 30, responseP95Ms: 9100, deliveredP95Ms: 4000, deliveredN: 20, unavailable: proportion(1, 30) };
+    const result = aggregate(items, judgments, computeCodeMetrics(records), live);
     const byKey = Object.fromEntries(result.targets.map((t) => [t.key, t]));
     expect(byKey.fabricated?.value).toMatchObject({ hits: 2, n: 3 });
     expect(byKey.fabricated?.met).toBe(false);
     expect(byKey.idkCorrect?.value).toMatchObject({ hits: 1, n: 2 });
     expect(byKey.correctAnswers?.value).toMatchObject({ hits: 1, n: 2 });
     expect(byKey.citationsCorrect?.value).toMatchObject({ hits: 1, n: 2 });
-    // Latency target comes from the live run; eval latency without retries is informational.
-    expect(byKey.latencyP95Ms).toMatchObject({ value: 9100, met: false });
+    // Time and availability come from the live run; eval latency without retries is informational.
+    expect(byKey.responseTimeP95Ms).toMatchObject({ value: 9100, met: false, target: '≤ 8 s' });
+    expect(byKey.deliveredLatencyP95Ms).toMatchObject({ value: 4000, met: null });
+    expect(byKey.unavailableRate).toMatchObject({ value: { hits: 1, n: 30 }, met: true, target: '≤ 5%' });
     expect(byKey.modelLatencyP95Ms).toMatchObject({ value: 1000, met: null, target: '—' });
     const noLive = aggregate(items, judgments, computeCodeMetrics(records));
-    expect(noLive.targets.map((t) => t.key)).not.toContain('latencyP95Ms');
+    expect(noLive.targets.map((t) => t.key)).not.toContain('responseTimeP95Ms');
     expect(result.judge.completeMean).toBe(1);
     expect(result.judge.appropriateOnNonAnswered).toMatchObject({ hits: 1, n: 1 });
+  });
+
+  it('checks realistic live runs against the targets and keeps stress runs informational', () => {
+    const { judgments } = validateJudgments(items, good);
+    const realistic = { n: 30, responseP95Ms: 7600, deliveredP95Ms: 5000, deliveredN: 25, unavailable: proportion(2, 30) };
+    const burst = { n: 30, responseP95Ms: 9000, deliveredP95Ms: 6000, deliveredN: 20, unavailable: proportion(6, 30) };
+    const rows = aggregate(items, judgments, computeCodeMetrics(records), realistic, burst).targets.slice(-6);
+    expect(rows.map((t) => [t.key, t.met])).toEqual([
+      ['responseTimeP95Ms', true],
+      ['deliveredLatencyP95Ms', null],
+      ['unavailableRate', false],
+      ['responseTimeP95Ms', null],
+      ['deliveredLatencyP95Ms', null],
+      ['unavailableRate', null],
+    ]);
+    expect(rows[3]?.label).toContain('stress burst');
+    expect(rows[0]?.label).toContain('realistic arrivals, n=30');
   });
 
   it('uses the judge-observed behavior for external answers and skips code-only targets', () => {

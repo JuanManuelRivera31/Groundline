@@ -6,6 +6,7 @@ import { answerQuestion, generationLimitDefaults, maxSimilarity, mulberry32, pla
 import { PgDb } from '@groundline/db/node';
 import { createAnswerRuntime } from '../answer-runtime.ts';
 import {
+  arrivalOffsets,
   batches,
   codeMetricsMarkdown,
   computeCodeMetrics,
@@ -21,8 +22,10 @@ import { assertSetAllowed } from '../retrieval.ts';
 import { parseJsonl, toJsonl, type EvalQuestion } from '../schema.ts';
 
 const SAMPLE_SEED = 20261123;
+/** Fixed seed for the realistic live arrivals (--arrival-mean-ms). */
+const ARRIVAL_SEED = 20261125;
 
-const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--prompt v3] [--model <eval primary>] [--live] [--sample N] [--dry-run] [--batch-size 10] [--max-requests N] [--resume <run>.partial.jsonl] | --set dev --external answers.csv [--label name]';
+const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--prompt v3] [--model <eval primary>] [--live] [--sample N] [--arrival-mean-ms N] [--dry-run] [--batch-size 10] [--max-requests N] [--resume <run>.partial.jsonl] | --set dev --external answers.csv [--label name]';
 
 async function freeBase(base: string): Promise<string> {
   let candidate = base;
@@ -106,6 +109,7 @@ async function main(): Promise<void> {
       'max-requests': { type: 'string' },
       live: { type: 'boolean', default: false },
       sample: { type: 'string' },
+      'arrival-mean-ms': { type: 'string' },
       prompt: { type: 'string' },
       model: { type: 'string' },
       resume: { type: 'string' },
@@ -132,6 +136,13 @@ async function main(): Promise<void> {
     questions = allQuestions.filter((q) => picked.has(q.id));
   }
   const mode = values.live ? 'live' : 'eval';
+  // --arrival-mean-ms N: seeded exponential gaps between question starts (realistic live traffic, one question at a time).
+  let arrivalMeanMs: number | null = null;
+  if (values['arrival-mean-ms'] !== undefined) {
+    arrivalMeanMs = Number(values['arrival-mean-ms']);
+    if (!values.live) throw new Error('--arrival-mean-ms needs --live.');
+    if (!Number.isInteger(arrivalMeanMs) || arrivalMeanMs < 1 || arrivalMeanMs > 600_000) throw new Error('--arrival-mean-ms must be an integer in [1, 600000].');
+  }
 
   if (values.external) {
     await runExternal(questions, values.external, label, batchSize);
@@ -182,6 +193,9 @@ async function main(): Promise<void> {
     console.log(`Generation requests needed: up to ${generationNeeded} (+ retries on 429/5xx${mode === 'live' ? ' / hops' : ''})`);
     for (const q of runtime.generationQuotas) console.log(`  remaining today (${q.model}): ${q.remaining} of ${q.limit}`);
     console.log(`Embedding requests needed: ${plan.misses.length} | remaining today (${e.model}): ${e.remaining} of ${e.limit}`);
+    // Offsets for the whole sample (stable across resumes); a resumed run keeps the gaps between the remaining questions.
+    const offsets = arrivalMeanMs === null ? null : arrivalOffsets(questions.length, arrivalMeanMs, mulberry32(ARRIVAL_SEED));
+    if (offsets) console.log(`Arrivals: exponential gaps, mean ${arrivalMeanMs} ms, seed ${ARRIVAL_SEED}; about ${((offsets.at(-1) ?? 0) / 60_000).toFixed(1)} min of arrivals for the full sample.`);
     if (values['dry-run']) {
       console.log('Dry run: no API calls made.');
       return;
@@ -209,8 +223,18 @@ async function main(): Promise<void> {
     const records: AnswerRecord[] = [...done];
     let failure: unknown;
     let spent = 0;
+    const runStart = Date.now();
+    const first = todo[0];
+    const firstOffset = offsets && first ? (offsets[questions.indexOf(first)] ?? 0) : 0;
+    // Actual start of each question in this invocation (ms from its start), recorded with the arrivals.
+    const startedMs: Record<string, number> = {};
     for (const q of todo) {
       const i = questions.indexOf(q);
+      if (offsets) {
+        const wait = runStart + ((offsets[i] ?? 0) - firstOffset) - Date.now();
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+        startedMs[q.id] = Date.now() - runStart;
+      }
       // Worst case for one question is 1 + maxRetries attempts; stop before the cap could be crossed.
       if (spent + 1 + config.embedding.maxRetries > maxRequests) {
         failure = new Error(`Stopped before ${q.id}: ${spent} generation requests used, cap ${maxRequests} (retries on 429/5xx). Partial run saved.`);
@@ -254,6 +278,7 @@ async function main(): Promise<void> {
       partial,
       mode,
       sample: values.sample === undefined ? null : { n: questions.length, seed: SAMPLE_SEED },
+      arrivals: offsets ? { meanMs: arrivalMeanMs, seed: ARRIVAL_SEED, offsetsMs: offsets, startedMs, resumed: resumeFile !== undefined } : null,
       promptVersion,
       config: configSummary(config),
       metrics,

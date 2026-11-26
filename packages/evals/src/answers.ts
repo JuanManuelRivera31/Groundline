@@ -145,8 +145,17 @@ export interface CodeMetrics {
   readonly downgradedNoValidCitations: number;
   readonly invalidOutput: number;
   readonly floorHits: Record<ExpectedBehavior, number>;
-  /** all: every question; modelCalls: questions that called the model; firstAttempt: model calls without retries. */
-  readonly latencyMs: { readonly all: LatencySummary; readonly modelCalls: LatencySummary; readonly firstAttempt: LatencySummary };
+  /**
+   * all: every question (in live mode, the time to any response); modelCalls: questions that called the model;
+   * firstAttempt: model calls without retries; delivered: responses whose status a model produced
+   * (answered_by set: floor hits and unavailable excluded).
+   */
+  readonly latencyMs: {
+    readonly all: LatencySummary;
+    readonly modelCalls: LatencySummary;
+    readonly firstAttempt: LatencySummary;
+    readonly delivered: LatencySummary;
+  };
   /** Questions whose generation needed more than one HTTP attempt (429/5xx retries). */
   readonly retriedAnswers: number;
   readonly queueWaitMs: number;
@@ -221,6 +230,7 @@ export function computeCodeMetrics(records: readonly AnswerRecord[]): CodeMetric
       all: latencySummary(records.map((r) => r.latency.totalMs)),
       modelCalls: latencySummary(called.map((r) => r.latency.totalMs)),
       firstAttempt: latencySummary(called.filter((r) => r.usage.generationRequests === 1).map((r) => r.latency.totalMs)),
+      delivered: latencySummary(records.filter((r) => r.answered_by !== null && r.answered_by !== undefined).map((r) => r.latency.totalMs)),
     },
     retriedAnswers: called.filter((r) => r.usage.generationRequests > 1).length,
     queueWaitMs: records.reduce((sum, r) => sum + r.latency.queueWaitMs, 0),
@@ -347,8 +357,10 @@ export const TARGETS = {
   idkCorrect: { min: 0.9, label: 'Correct "I don\'t know" on abstain questions' },
   correctAnswers: { min: 0.85, label: 'Correct answers on answer questions' },
   citationsCorrect: { min: 0.9, label: 'Citations to the correct source (document level)' },
-  latencyP95Ms: { max: 8000, label: 'Latency p95 (live mode)' },
   modelLatencyP95Ms: { label: 'Model latency p95 (eval mode, no retries; informational)' },
+  responseTimeP95Ms: { max: 8000, label: 'Time to any response p95 (live)' },
+  deliveredLatencyP95Ms: { label: 'Model-delivered response latency p95 (live; informational)' },
+  unavailableRate: { max: 0.05, label: 'Unavailable rate (live)' },
 } as const;
 
 export interface TargetRow {
@@ -360,10 +372,66 @@ export interface TargetRow {
   readonly met: boolean | null;
 }
 
-/** Live-mode latency input for the latency target (ADR-0010: the target is measured in live mode). */
-export interface LiveLatency {
-  readonly p95Ms: number;
+/** Time and availability from a live-mode run (ADR-0010, amendment S5c). */
+export interface LiveSummary {
+  /** Questions in the live run. */
   readonly n: number;
+  /** p95 of the time to any response (every status, unavailable included). */
+  readonly responseP95Ms: number;
+  /** p95 latency of responses whose status a model produced. */
+  readonly deliveredP95Ms: number;
+  readonly deliveredN: number;
+  readonly unavailable: Proportion;
+}
+
+export function liveSummary(m: Pick<CodeMetrics, 'latencyMs' | 'availability'>): LiveSummary {
+  return {
+    n: m.latencyMs.all.n,
+    responseP95Ms: m.latencyMs.all.p95,
+    deliveredP95Ms: m.latencyMs.delivered.p95,
+    deliveredN: m.latencyMs.delivered.n,
+    unavailable: m.availability.unavailable,
+  };
+}
+
+/** Rows for a live run: realistic traffic is checked against the targets; a stress run is informational only. */
+function liveRows(live: LiveSummary, kind: 'realistic' | 'stress'): TargetRow[] {
+  const stress = kind === 'stress';
+  const suffix = stress ? `, stress burst, n=${live.n}; informational` : `, realistic arrivals, n=${live.n}`;
+  return [
+    {
+      key: 'responseTimeP95Ms',
+      label: `${TARGETS.responseTimeP95Ms.label}${suffix}`,
+      value: live.responseP95Ms,
+      target: stress ? '—' : '≤ 8 s',
+      met: stress ? null : live.n > 0 && live.responseP95Ms <= TARGETS.responseTimeP95Ms.max,
+    },
+    {
+      key: 'deliveredLatencyP95Ms',
+      label: `Model-delivered response latency p95 (live, ${stress ? 'stress burst' : 'realistic arrivals'}, n=${live.deliveredN}; informational)`,
+      value: live.deliveredP95Ms,
+      target: '—',
+      met: null,
+    },
+    {
+      key: 'unavailableRate',
+      label: `${TARGETS.unavailableRate.label}${suffix}`,
+      value: live.unavailable,
+      target: stress ? '—' : '≤ 5%',
+      met: stress ? null : live.unavailable.n > 0 && live.unavailable.value <= TARGETS.unavailableRate.max,
+    },
+  ];
+}
+
+/** Exponential inter-arrival offsets (ms from the run start, first at 0) with the given mean gap; seeded. */
+export function arrivalOffsets(n: number, meanMs: number, random: () => number): number[] {
+  const offsets: number[] = [];
+  let at = 0;
+  for (let i = 0; i < n; i++) {
+    if (i > 0) at += Math.round(-meanMs * Math.log(1 - random()));
+    offsets.push(at);
+  }
+  return offsets;
 }
 
 export interface AggregateMetrics {
@@ -387,7 +455,8 @@ export function aggregate(
   items: readonly JudgeItem[],
   judgments: readonly Judgment[],
   code: Pick<CodeMetrics, 'citations' | 'latencyMs'> | null,
-  live: LiveLatency | null = null,
+  live: LiveSummary | null = null,
+  stress: LiveSummary | null = null,
 ): AggregateMetrics {
   const byId = new Map(judgments.map((j) => [j.id, j]));
   const rows = items.map((item) => ({ item, j: byId.get(item.id), status: effectiveStatus(item, byId.get(item.id)) }));
@@ -439,15 +508,8 @@ export function aggregate(
       },
     );
   }
-  if (live) {
-    targets.push({
-      key: 'latencyP95Ms',
-      label: `${TARGETS.latencyP95Ms.label}, n=${live.n}`,
-      value: live.p95Ms,
-      target: '≤ 8 s',
-      met: live.p95Ms <= TARGETS.latencyP95Ms.max,
-    });
-  }
+  if (live) targets.push(...liveRows(live, 'realistic'));
+  if (stress) targets.push(...liveRows(stress, 'stress'));
 
   const appropriateByExpected = {} as Record<ExpectedBehavior, Proportion>;
   for (const b of BEHAVIORS) {
@@ -554,7 +616,7 @@ export function codeMetricsMarkdown(m: CodeMetrics): string {
     `- Quotes verified: ${ci(m.quotes.verified)}; invalid by reason: ${JSON.stringify(m.quotes.invalidByReason)}.`,
     `- Removed sentences: failed citation ${m.removedSentences.failedCitation}, unmarked claim ${m.removedSentences.unmarkedClaim}; downgraded to insufficient (no valid citation): ${m.downgradedNoValidCitations}; invalid output: ${m.invalidOutput}.`,
     `- Floor hits by expected behavior: ${JSON.stringify(m.floorHits)}.`,
-    `- Latency (excl. queue wait) all: p50 ${(m.latencyMs.all.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.all.p95 / 1000).toFixed(2)} s, max ${(m.latencyMs.all.max / 1000).toFixed(2)} s; model calls only: p50 ${(m.latencyMs.modelCalls.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.modelCalls.p95 / 1000).toFixed(2)} s; model calls without retries (n=${m.latencyMs.firstAttempt.n}): p95 ${(m.latencyMs.firstAttempt.p95 / 1000).toFixed(2)} s. Answers that needed retries: ${m.retriedAnswers}. Queue wait total ${(m.queueWaitMs / 1000).toFixed(1)} s.`,
+    `- Latency (eval: excl. queue wait; live: time to any response, incl. queue wait) all: p50 ${(m.latencyMs.all.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.all.p95 / 1000).toFixed(2)} s, max ${(m.latencyMs.all.max / 1000).toFixed(2)} s; model calls only: p50 ${(m.latencyMs.modelCalls.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.modelCalls.p95 / 1000).toFixed(2)} s; model calls without retries (n=${m.latencyMs.firstAttempt.n}): p95 ${(m.latencyMs.firstAttempt.p95 / 1000).toFixed(2)} s; model-delivered responses (n=${m.latencyMs.delivered.n}): p95 ${(m.latencyMs.delivered.p95 / 1000).toFixed(2)} s. Answers that needed retries: ${m.retriedAnswers}. Queue wait total ${(m.queueWaitMs / 1000).toFixed(1)} s.`,
     `- Tokens per model call (mean): prompt ${m.tokens.meanPrompt.toFixed(0)}, output ${m.tokens.meanOutput.toFixed(0)}, thoughts ${m.tokens.meanThoughts.toFixed(0)}.`,
     `- Availability: unavailable ${ci(m.availability.unavailable)}; answered by ${JSON.stringify(m.availability.answeredBy)}; hops ${JSON.stringify(m.availability.hops)}; attempts by model/status ${JSON.stringify(m.availability.attemptsByModel)}; retrieval fallback ${JSON.stringify(m.availability.retrievalFallback)}.`,
     `- Quote words: all ${fmtDist(m.quoteWords.all)}; valid ${fmtDist(m.quoteWords.valid)}; >40 words: ${m.quoteWords.over40}, >80 words: ${m.quoteWords.over80}.`,

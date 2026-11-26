@@ -8,17 +8,26 @@ import {
   codeMetricsMarkdown,
   computeCodeMetrics,
   judgeItemFromRecord,
+  liveSummary,
   pct,
   targetsMarkdown,
   validateJudgments,
   type AnswerRecord,
   type JudgeItem,
-  type LiveLatency,
+  type LiveSummary,
 } from '../answers.ts';
 import { errorMessage } from '../io.ts';
 import { parseJsonl } from '../schema.ts';
 
-const USAGE = 'Usage: pnpm eval:aggregate evals/runs/<date>-answers[-label].json [--live evals/runs/<date>-answers-<label>-live.json]';
+const USAGE =
+  'Usage: pnpm eval:aggregate evals/runs/<date>-answers[-label].json [--live <realistic live run>.json] [--stress <burst live run>.json]';
+
+/** Time and availability recomputed from a live run's records (works for runs recorded before S5c too). */
+async function readLive(path: string): Promise<LiveSummary> {
+  const run = JSON.parse(await readFile(resolve(path), 'utf8')) as { mode?: string; records?: AnswerRecord[] };
+  if (run.mode !== 'live') throw new Error(`${path} is not a live-mode run.`);
+  return liveSummary(computeCodeMetrics(run.records ?? []));
+}
 
 interface RunFile {
   kind: 'answers' | 'external';
@@ -30,7 +39,11 @@ interface RunFile {
 }
 
 async function main(): Promise<void> {
-  const { values, positionals } = parseArgs({ options: { live: { type: 'string' }, help: { type: 'boolean' } }, allowPositionals: true, strict: true });
+  const { values, positionals } = parseArgs({
+    options: { live: { type: 'string' }, stress: { type: 'string' }, help: { type: 'boolean' } },
+    allowPositionals: true,
+    strict: true,
+  });
   const arg = positionals[0];
   if (!arg || values.help) {
     console.log(USAGE);
@@ -51,16 +64,12 @@ async function main(): Promise<void> {
   if (errors.length > 0) throw new Error(`Invalid judgments:\n- ${errors.join('\n- ')}`);
 
   const code = run.kind === 'answers' ? computeCodeMetrics(run.records ?? []) : null;
-  let live: LiveLatency | null = null;
-  if (values.live) {
-    const liveRun = JSON.parse(await readFile(resolve(values.live), 'utf8')) as { mode?: string; metrics: { latencyMs: { all: { p95: number; n: number } } } };
-    if (liveRun.mode !== 'live') throw new Error(`${values.live} is not a live-mode run.`);
-    live = { p95Ms: liveRun.metrics.latencyMs.all.p95, n: liveRun.metrics.latencyMs.all.n };
-  }
-  const metrics = aggregate(items, judgments, code, live);
+  const live = values.live ? await readLive(values.live) : null;
+  const stress = values.stress ? await readLive(values.stress) : null;
+  const metrics = aggregate(items, judgments, code, live, stress);
   const judgeModels = [...new Set(judgments.map((j) => j.judge_model))];
 
-  await writeFile(`${base}-aggregate.json`, `${JSON.stringify({ run: arg, live: values.live ?? null, judgeModels, code, ...metrics }, null, 2)}\n`, 'utf8');
+  await writeFile(`${base}-aggregate.json`, `${JSON.stringify({ run: arg, live: values.live ?? null, stress: values.stress ?? null, judgeModels, code, ...metrics }, null, 2)}\n`, 'utf8');
   const j = metrics.judge;
   const md = [
     `# Aggregate: ${arg.replace(/\\/g, '/')}`,
