@@ -128,6 +128,44 @@ The validator is unchanged.
 - 500 ms is kept as a network and post-processing margin under the 8 s time-to-response target (ADR-0010, amendment S5c).
 - It is a design guarantee, not a model improvement. The trade-off is a slightly higher chance of `unavailable` when both chain models are slow.
 
+## Amendment S5d (2026-11-26): live hedge and a cold-embedding live sample
+
+**Why.** In the S5c realistic live sample, 10 of 30 answers were `unavailable` (33.3%), against a target of ≤ 5% (ADR-0010).
+- In 7 of the 10, gemini-3.5-flash-lite stalled until the whole 7.5 s budget was gone, so the fallback never got a turn. In those same minutes the fallback answered in 1.3–1.5 s.
+- The sequential chain let one silent primary take the whole budget.
+- The owner approved this as an availability amendment, outside the quality freeze (report S5c).
+
+### Hedge in live mode
+- **Trigger.** When the model in flight has not answered after **`HEDGE_AFTER_MS` (default 3,000 ms)**, the engine starts the next chain model **in parallel**.
+- **Winner.** The first acceptable response wins: HTTP 200, finish reason `STOP`, and JSON that matches the schema.
+  - The other call is aborted through its `AbortController` and recorded as outcome **`cancelled`**.
+  - If the first response is unusable (invalid JSON, `MAX_TOKENS`), the engine keeps waiting for the call still in flight. If none does better, the unusable response is used, which gives `insufficient` as before. There is still no retry on bad output.
+- **Errors.** A 503, another error or a timeout on a model switches to the next model at once, without waiting for the hedge timer, as before. A 429 keeps its single retry when the `retryDelay` fits the budget.
+- **Budget.** The total budget stays **7,500 ms**. Every call, hedged ones included, is aborted at the deadline, so a response never leaves later than the budget. A hedge is not started when less than 300 ms would remain.
+- **Disabling.** `HEDGE_AFTER_MS=0` turns the hedge off and restores the sequential chain.
+- **Accounting:**
+  - both calls of a hedged question are recorded in `api_usage` (a cancelled call with status 0 and its duration) and count against the client-side RPD, because it is not documented whether Google counts aborted requests;
+  - each run record stores `answered_by` (the winner), `hedged`, `hops` (models started − 1) and `attempts[]`, including the cancelled call;
+  - `generationMs` is the wall time of the generation phase, because hedged calls overlap.
+- **Cost.** At most one extra request per slow question. With the 3 s trigger and the S5c timings, that is roughly 7–11 extra requests per 30 live questions, within the free-tier RPD.
+
+### Live sample without the embedding cache
+- `pnpm eval:answers --set dev --live … --no-embed-cache` skips cached query embeddings and embeds every question live.
+  - The live embedding runs inside the same budget, with one attempt and no backoff.
+  - If it fails, the existing full-text fallback applies (`retrieval_fallback: fts`).
+  - The fresh vector still refreshes the cache entry.
+- Every answer now records `latency.embeddingMs`, the query embedding step, which is part of `retrievalMs`.
+  - Code metrics report its p50 and p95.
+  - The aggregate adds an informational row, "Query embedding latency p95 (live)", for runs that store it.
+- This measures the cold path a real customer hits with a new question, which the cached samples hid.
+
+### Why this does not touch the frozen quality configuration
+- **Eval mode never uses the chain.** `generateEval` (the primary model only, with patient retries) is unchanged. The quality targets and the frozen test run in eval mode, so the hedge cannot change any quality number.
+- **The frozen items are unchanged:** prompt v4, validator, FLOOR 0.600, retrieval (vector, 20 → 6), models, generation settings and the 7,500 ms budget.
+  - The hedge changes only *which* chain model answers in live mode, and *when* the fallback starts.
+  - Every answer still goes through the same parsing, citation validation and policy.
+- **Live quality is still the mix of the two models' eval columns** (S5c: the primary meets the targets, the fallback misses two). The hedge can raise the fallback's share of live answers. That trade-off is measured in the next live sample by `answered_by` and `hedged`.
+
 ## Consequences
 
 - A floor hit costs no generation request. Every other question costs exactly one, plus retries on 429/5xx.
@@ -143,3 +181,5 @@ The validator is unchanged.
 - Gemini rate limits (free-tier values only shown in AI Studio; no statement on whether failed requests count): https://ai.google.dev/gemini-api/docs/rate-limits
 - Gemini troubleshooting, retry strategy (exponential backoff on 429/503), read 2026-11-24: https://ai.google.dev/gemini-api/docs/troubleshooting
 - Gemini models (gemini-3.5-flash-lite and gemini-3.1-flash-lite listed as Stable), read 2026-11-24: https://ai.google.dev/gemini-api/docs/models
+- AbortController (`abort()` cancels fetch requests and response bodies; used to cancel the losing hedged call), read 2026-11-26: https://developer.mozilla.org/en-US/docs/Web/API/AbortController
+- J. Dean and L. A. Barroso, "The Tail at Scale", Communications of the ACM 56 (2013), on tail-tolerant techniques for latency-critical services. The publication page was read 2026-11-26; it shows the abstract only: https://research.google/pubs/the-tail-at-scale/
