@@ -79,12 +79,27 @@ Brackets are 95% Wilson intervals.
    - Each judge is an isolated Claude Sonnet agent that sees only the rubric (`evals/judge/rubric-v1.md`) and a batch of 10 items: question, reference answer, key facts, the bot's answer and the text of the sources it cited.
    - For answered items it decides whether the answer is correct and complete, and counts claims not supported by the cited text. For the other items it decides whether the behavior was appropriate.
    - "Fabricated" means at least one unsupported claim.
-3. **A second judge** (Claude Opus, same rubric, isolated) re-graded a seeded random sample of 30 primary-model items (seed 20261126). It agreed with the first judge on **every item**:
-   - `correct` on 21/21 answered items;
-   - `unsupported_claims` on 21/21, both "any" and the exact count;
-   - `appropriate` on 9/9 non-answered items (Cohen's κ = 1.00).
+3. **A second judge** (Claude Opus, same rubric v1, isolated) re-graded primary-model items in two samples. Every official number in this report is the first judge's (Sonnet); the second judge is a check and changes no figure.
+   - **Random sample** of 30 items (seed 20261126). Opus agreed on every item, but the sample held no item that Sonnet had failed, so it could not test agreement on failures.
+   - **Stratified sample** of 33 items:
+     - all **13** items Sonnet counted as failures: incorrect, with an unsupported claim, or behavior not appropriate;
+     - **20** seeded items Sonnet passed (seed 20261127);
+     - the items were mixed in run order, so the judge could not tell the strata apart.
 
-   The sample contained no answered item that either judge marked incorrect, so κ for `correct` is undefined and the sample does not test agreement on failures.
+   | Stratum | Overall verdict agreement (fail vs pass) | `correct` | `unsupported_claims` > 0 | `appropriate` |
+   | --- | --- | --- | --- | --- |
+   | Sonnet failures (13) | **76.9%** (10/13) [49.7–91.8] | 4/6 | 5/6 | 7/7 |
+   | Sonnet passes (20) | **100%** (20/20) [83.9–100] | 14/14 | 14/14 | 6/6 |
+   | Pooled (33)* | 90.9% (30/33), **κ = 0.80** | 18/20, κ = 0.69 | 19/20, κ = 0.00 | 13/13, κ = 1.00 |
+
+   \* The pooled κ is computed on a sample enriched with failures, so it is not representative of the whole run. Within each stratum one judge's verdict is constant, so κ is undefined or 0 there and the agreement rate is the meaningful number.
+
+   **The 3 disagreements**, reported as they are. In all three, Opus was more lenient than Sonnet:
+   - **test-038:** Sonnet says incorrect, Opus says correct. Both note that the answer never names the "Limit to segment" option and omits the site-segment restriction. Sonnet judged the customer unable to act on it; Opus judged the core fact conveyed.
+   - **test-082:** Sonnet counts 1 unsupported claim, Opus counts 0. Sonnet judged that the invoice "Add address & VAT Number" step is evidence for adding a missing VAT number, not for correcting a wrong one; Opus judged that alternative supported. This is the only fabricated answer in the official count.
+   - **test-103:** Sonnet says incorrect, Opus says correct. Both note that it omits the working path: GCS delivery through the S3-compatible endpoint with HMAC credentials. Sonnet judged it unresolved; Opus judged that it answers the literal question.
+
+   The official figures stay as graded by Sonnet: 1.2% fabricated, 88.2% correct answers. On these items the first judge is the stricter of the two.
 4. **Human audit: pending.** A fixed sample of 20 test questions (`audit_sample.csv`, seed 20261123) is reserved for a human review of labels and grades. This report will be updated with its result.
 
 ### Live traffic
