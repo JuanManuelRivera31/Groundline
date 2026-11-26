@@ -1,0 +1,254 @@
+{
+  "run": "evals/runs/2026-11-26-answers-test-35.json",
+  "seed": 20261127,
+  "design": "stratified",
+  "firstJudge": [
+    "claude-sonnet"
+  ],
+  "secondJudge": [
+    "claude-opus"
+  ],
+  "sections": [
+    {
+      "title": "Stratum: first-judge failures",
+      "n": 13,
+      "verdict": {
+        "agreement": {
+          "value": 0.7692307692307693,
+          "lo": 0.49743623839480355,
+          "hi": 0.918204713457304,
+          "hits": 10,
+          "n": 13
+        },
+        "kappa": 0,
+        "disagreements": [
+          {
+            "id": "test-038",
+            "first": "fail",
+            "second": "pass"
+          },
+          {
+            "id": "test-082",
+            "first": "fail",
+            "second": "pass"
+          },
+          {
+            "id": "test-103",
+            "first": "fail",
+            "second": "pass"
+          }
+        ]
+      },
+      "fields": {
+        "n": 13,
+        "answered": 6,
+        "correct": {
+          "agreement": {
+            "value": 0.6666666666666666,
+            "lo": 0.29999331299474324,
+            "hi": 0.9032285897864654,
+            "hits": 4,
+            "n": 6
+          },
+          "kappa": 0.33333333333333326
+        },
+        "unsupportedAny": {
+          "agreement": {
+            "value": 0.8333333333333334,
+            "lo": 0.4364971749742326,
+            "hi": 0.969946630588185,
+            "hits": 5,
+            "n": 6
+          },
+          "kappa": 0
+        },
+        "unsupportedExact": {
+          "value": 0.8333333333333334,
+          "lo": 0.4364971749742326,
+          "hi": 0.969946630588185,
+          "hits": 5,
+          "n": 6
+        },
+        "appropriate": {
+          "agreement": {
+            "value": 1,
+            "lo": 0.6456695613241317,
+            "hi": 1,
+            "hits": 7,
+            "n": 7
+          },
+          "kappa": null
+        },
+        "disagreements": [
+          {
+            "id": "test-038",
+            "field": "correct",
+            "first": false,
+            "second": true
+          },
+          {
+            "id": "test-082",
+            "field": "unsupported_claims",
+            "first": 1,
+            "second": 0
+          },
+          {
+            "id": "test-103",
+            "field": "correct",
+            "first": false,
+            "second": true
+          }
+        ]
+      }
+    },
+    {
+      "title": "Stratum: first-judge passing items",
+      "n": 20,
+      "verdict": {
+        "agreement": {
+          "value": 1,
+          "lo": 0.8388748398148705,
+          "hi": 1,
+          "hits": 20,
+          "n": 20
+        },
+        "kappa": null,
+        "disagreements": []
+      },
+      "fields": {
+        "n": 20,
+        "answered": 14,
+        "correct": {
+          "agreement": {
+            "value": 1,
+            "lo": 0.7846891945970195,
+            "hi": 0.9999999999999999,
+            "hits": 14,
+            "n": 14
+          },
+          "kappa": null
+        },
+        "unsupportedAny": {
+          "agreement": {
+            "value": 1,
+            "lo": 0.7846891945970195,
+            "hi": 0.9999999999999999,
+            "hits": 14,
+            "n": 14
+          },
+          "kappa": null
+        },
+        "unsupportedExact": {
+          "value": 1,
+          "lo": 0.7846891945970195,
+          "hi": 0.9999999999999999,
+          "hits": 14,
+          "n": 14
+        },
+        "appropriate": {
+          "agreement": {
+            "value": 1,
+            "lo": 0.6096657083436265,
+            "hi": 1,
+            "hits": 6,
+            "n": 6
+          },
+          "kappa": null
+        },
+        "disagreements": []
+      }
+    },
+    {
+      "title": "Pooled (stratified sample, not representative of the run)",
+      "n": 33,
+      "verdict": {
+        "agreement": {
+          "value": 0.9090909090909091,
+          "lo": 0.7642739420848934,
+          "hi": 0.9685960587203024,
+          "hits": 30,
+          "n": 33
+        },
+        "kappa": 0.8016032064128256,
+        "disagreements": [
+          {
+            "id": "test-038",
+            "first": "fail",
+            "second": "pass"
+          },
+          {
+            "id": "test-082",
+            "first": "fail",
+            "second": "pass"
+          },
+          {
+            "id": "test-103",
+            "first": "fail",
+            "second": "pass"
+          }
+        ]
+      },
+      "fields": {
+        "n": 33,
+        "answered": 20,
+        "correct": {
+          "agreement": {
+            "value": 0.9,
+            "lo": 0.6989663528135878,
+            "hi": 0.9721335190383086,
+            "hits": 18,
+            "n": 20
+          },
+          "kappa": 0.6923076923076924
+        },
+        "unsupportedAny": {
+          "agreement": {
+            "value": 0.95,
+            "lo": 0.7638688045357189,
+            "hi": 0.9911185512976646,
+            "hits": 19,
+            "n": 20
+          },
+          "kappa": 0
+        },
+        "unsupportedExact": {
+          "value": 0.95,
+          "lo": 0.7638688045357189,
+          "hi": 0.9911185512976646,
+          "hits": 19,
+          "n": 20
+        },
+        "appropriate": {
+          "agreement": {
+            "value": 1,
+            "lo": 0.7719046248681998,
+            "hi": 1,
+            "hits": 13,
+            "n": 13
+          },
+          "kappa": 1
+        },
+        "disagreements": [
+          {
+            "id": "test-038",
+            "field": "correct",
+            "first": false,
+            "second": true
+          },
+          {
+            "id": "test-082",
+            "field": "unsupported_claims",
+            "first": 1,
+            "second": 0
+          },
+          {
+            "id": "test-103",
+            "field": "correct",
+            "first": false,
+            "second": true
+          }
+        ]
+      }
+    }
+  ]
+}

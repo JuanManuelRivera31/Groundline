@@ -1,50 +1,70 @@
 {
   "run": "evals/runs/2026-11-26-answers-test-35.json",
   "seed": 20261126,
+  "design": "random",
   "firstJudge": [
     "claude-sonnet"
   ],
   "secondJudge": [
     "claude-opus"
   ],
-  "n": 30,
-  "answered": 21,
-  "correct": {
-    "agreement": {
-      "value": 1,
-      "lo": 0.8453609790128563,
-      "hi": 1,
-      "hits": 21,
-      "n": 21
-    },
-    "kappa": null
-  },
-  "unsupportedAny": {
-    "agreement": {
-      "value": 1,
-      "lo": 0.8453609790128563,
-      "hi": 1,
-      "hits": 21,
-      "n": 21
-    },
-    "kappa": null
-  },
-  "unsupportedExact": {
-    "value": 1,
-    "lo": 0.8453609790128563,
-    "hi": 1,
-    "hits": 21,
-    "n": 21
-  },
-  "appropriate": {
-    "agreement": {
-      "value": 1,
-      "lo": 0.700854948272956,
-      "hi": 1,
-      "hits": 9,
-      "n": 9
-    },
-    "kappa": 1
-  },
-  "disagreements": []
+  "sections": [
+    {
+      "title": "Sample",
+      "n": 30,
+      "verdict": {
+        "agreement": {
+          "value": 1,
+          "lo": 0.886486605238548,
+          "hi": 1,
+          "hits": 30,
+          "n": 30
+        },
+        "kappa": 1,
+        "disagreements": []
+      },
+      "fields": {
+        "n": 30,
+        "answered": 21,
+        "correct": {
+          "agreement": {
+            "value": 1,
+            "lo": 0.8453609790128563,
+            "hi": 1,
+            "hits": 21,
+            "n": 21
+          },
+          "kappa": null
+        },
+        "unsupportedAny": {
+          "agreement": {
+            "value": 1,
+            "lo": 0.8453609790128563,
+            "hi": 1,
+            "hits": 21,
+            "n": 21
+          },
+          "kappa": null
+        },
+        "unsupportedExact": {
+          "value": 1,
+          "lo": 0.8453609790128563,
+          "hi": 1,
+          "hits": 21,
+          "n": 21
+        },
+        "appropriate": {
+          "agreement": {
+            "value": 1,
+            "lo": 0.700854948272956,
+            "hi": 1,
+            "hits": 9,
+            "n": 9
+          },
+          "kappa": 1
+        },
+        "disagreements": []
+      }
+    }
+  ]
 }
