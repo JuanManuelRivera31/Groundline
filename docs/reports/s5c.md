@@ -46,7 +46,9 @@
     - in the other 3, a 503 on the primary was followed by a fallback timeout.
   - See "Why availability misses".
 - **Frozen configuration: prompt v4, commit `2c0c67b`.** From now until the frozen test, no change is made to prompt, validator, floor or retrieval. The full list is below.
-- **Checks:** lint clean, typecheck OK, **220 tests passed** (offline). CI green on `2c0c67b`.
+- **Checks:** lint clean, typecheck OK, **220 tests passed** (offline).
+  - In CI, the lint, typecheck and test job passed on every S5c commit.
+  - The gitleaks job failed from `5e80b2e` on: a false positive, the new metric name `deliveredLatencyP95Ms`. It was fixed by allowlisting the metric names in `.gitleaks.toml` (no credential involved, no history change).
 
 ## Targets: v3 vs v4 per model (Wilson 95%)
 
@@ -277,6 +279,10 @@ From this report until the frozen test, **nothing below changes**: no change to 
 - **Default limits.** The runs used the defaults, per the owner's instruction.
 - **Live samples not judged,** as in S5b. Their unjudged batch folders were removed, and the runs carry code metrics only.
 - **No fix for the availability miss.** It is reported, and the freeze is respected.
+- **Gitleaks false positive.** The rule `generic-api-key` read the target name `deliveredLatencyP95Ms` (in `answers.ts` and the aggregate JSON) as a key.
+  - The new target names were added to the existing allowlist of metric names.
+  - A full-history scan is now clean.
+  - This is a CI configuration change only; it does not touch the frozen runtime configuration.
 
 ## Risks
 
