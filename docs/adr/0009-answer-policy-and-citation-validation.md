@@ -110,7 +110,23 @@ v3 is the default (`ANSWER_PROMPT_VERSION=v3`); v1 and v2 are unchanged. It keep
   - **Query embedding in live mode:** cache first, then one attempt inside the same budget, without backoff. If it fails or doesn't fit, full-text search (no API) picks the 3 articles and the answer is `unavailable` (`retrieval_fallback: fts`). If full-text finds nothing, the fixed message goes out without articles (`retrieval_fallback: none`).
 - Every attempt is recorded in `api_usage` with the model actually called. Each run record stores `answered_by`, `hops`, `attempts[]` and `retrieval_fallback`.
 - **Quota accounting:** the official docs don't say whether 503 or 429 responses count against the daily quota. Google recommends exponential backoff with jitter on 429/503 and says nothing about switching models (https://ai.google.dev/gemini-api/docs/troubleshooting). Until that is documented, failed attempts keep counting against the client-side RPD.
-  - Live mode's model switch departs from that advice on purpose: an 8 s budget leaves no room for backoff.
+  - Live mode's model switch departs from that advice on purpose: an 8 s budget (7.5 s since S5c) leaves no room for backoff.
+
+## Amendment S5c (2026-11-25): prompt v4 and a 7.5 s live budget
+
+### Prompt v4 (iteration 3, the last on dev)
+Built from v3, with the same delimiting, schema and code-block validation. v1–v3 stay unchanged. The changes are general, and each has an invented example (fictional products; examples have Jaccard < 0.6 with every dev question):
+1. **Handoff only for actions we must perform.** The status is `handoff` only when the customer asks the support team to carry out an account or billing action for them ("delete it", "refund me", "wipe my stats"). "How" or "where do I do it myself" is answered with the documented steps. v3 handed off on the topic and not on the request (S5b: dev-037 handed off, dev-013 not).
+2. **One marker per list item and per step.** Every list item ends with its own `[Sx]`, because the validator removes unmarked items. In S5b, dev-002 lost three of its four steps this way.
+3. **One citation per step** in procedures, instead of one long quote. In S5b, dev-047 failed with an 83-word quote over the 80-word cap.
+
+The validator is unchanged.
+
+### Live budget
+`GEN_LIVE_BUDGET_MS` now defaults to **7,500 ms**, down from 8,000.
+- The budget is the latest moment any response leaves the engine, whatever its status, `unavailable` included.
+- 500 ms is kept as a network and post-processing margin under the 8 s time-to-response target (ADR-0010, amendment S5c).
+- It is a design guarantee, not a model improvement. The trade-off is a slightly higher chance of `unavailable` when both chain models are slow.
 
 ## Consequences
 

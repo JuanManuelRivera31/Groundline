@@ -31,14 +31,14 @@ Groundline is a reusable AI support-agent kit. It answers customer questions **o
 | `pnpm corpus:export --source plausible` | Write `data/eval-work/chunks.jsonl` (stable chunk ids; no network, no DB) |
 | `pnpm eval:build-sets` | Build and freeze `evals/plausible/{dev,test}.jsonl` from verified candidates (write-once) |
 | `pnpm eval:retrieval --set dev --mode vector\|fts\|hybrid\|all` | Retrieval metrics on dev (refuses `--set test`); writes `evals/runs/` |
-| `pnpm ask "<question>"` | One grounded answer in live mode (model chain, 8 s budget, `unavailable` fallback): status, cited answer, sources, max similarity vs floor, latency, tokens, equivalent cost |
+| `pnpm ask "<question>"` | One grounded answer in live mode (model chain, 7.5 s budget, `unavailable` fallback): status, cited answer, sources, max similarity vs floor, latency, tokens, equivalent cost |
 | `pnpm eval:calibrate-floor --set dev` | FLOOR from the latest dev vector run + sensitivity table (no API, no DB) |
 | `pnpm eval:answers --set dev [--label x] [--dry-run]` | Answer run on dev (refuses `--set test`); writes the run, code metrics and judge batches to `evals/runs/` |
 | `pnpm eval:answers --set dev --external answers.csv` | Audit another bot's answers (`id,answer`) with the same judge; no API calls |
 | `pnpm eval:revalidate <run.json>` | Re-apply the current validator to a stored answer run (no API); judge batches only for status changes |
-| `pnpm eval:answers --set dev --live --sample 30` | Live-mode sample (model chain + 8 s budget) for latency and availability |
-| `pnpm eval:answers --set dev --model gemini-3.1-flash-lite --label v3-31` | Eval run with another chain model as primary (per-model quality) |
-| `pnpm eval:aggregate <run.json> [--live <live-run.json>]` | Validate judgments and merge code + judge metrics against the targets (latency target from the live run) |
+| `pnpm eval:answers --set dev --live --sample 30 [--arrival-mean-ms 12000]` | Live-mode sample (model chain + 7.5 s budget) for time to response and availability; `--arrival-mean-ms` spaces arrivals (seeded), without it the sample is a back-to-back stress burst |
+| `pnpm eval:answers --set dev --model gemini-3.1-flash-lite --label v4-31` | Eval run with another chain model as primary (per-model quality) |
+| `pnpm eval:aggregate <run.json> [--live <live-run.json>] [--stress <burst-run.json>]` | Validate judgments and merge code + judge metrics against the targets (time to response and availability from the realistic live run; stress rows informational) |
 
 Node 26 runs the TypeScript sources directly (type stripping), so there is no compile step for the CLIs.
 

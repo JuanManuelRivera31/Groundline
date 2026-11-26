@@ -54,6 +54,26 @@ The kit is also sold as an **audit**: grading another vendor's bot on the same q
 - **Eval mode** retries the primary model patiently, so its latency mostly measures Google's load. It is reported as **"model latency"**: p95 of model calls that needed no retry. It is informational and not compared with the target.
 - **Quality metrics are reported per model.** Each chain model that can answer in live mode (gemini-3.5-flash-lite, gemini-3.1-flash-lite) gets its own eval run as primary (`--model`), with the same judge. The final report states what share of live answers each model gave, so the live quality can be read as a mix of the per-model numbers.
 
+#### Amendment S5c (2026-11-25): time, availability and the freeze
+- **The single live latency target is split into three metrics.** All three come from a live run with realistic arrivals, passed as `--live`.
+
+  | Metric | Definition | Target |
+  | --- | --- | --- |
+  | Time to any response | p95 of `latency.totalMs` (queue wait included) over every response: answered, insufficient (floor included), handoff, declined or unavailable | ≤ 8 s |
+  | Model-delivered latency | p95 over responses whose status a model produced (`answered_by` set; floor hits and `unavailable` excluded) | informational |
+  | Availability | rate of `unavailable`, with a Wilson interval | ≤ 5% |
+
+  The live budget drops to 7,500 ms (ADR-0009, amendment S5c). That bounds the time to any response by design and is reported as such, not as a model improvement.
+- **Realistic traffic:** `eval:answers --live --sample 30 --arrival-mean-ms 12000`.
+  - The arrival gaps are seeded exponential with a mean of 12 s (seed 20261125). Questions run one at a time, like a demo.
+  - It uses the same 30 questions as before (seed 20261123).
+- **Stress test:** the same 30 questions back to back (about 30 in 90 s), passed as `--stress`. All its rows are informational.
+- **Freeze:** after iteration 3 (S5c), nothing changes before the frozen test run on test.jsonl:
+  - prompt, validator, floor and retrieval;
+  - the model chain, the live budget and the judge rubric.
+
+  The exact frozen configuration and code commit are listed in `docs/reports/s5c.md`. A change after the freeze needs a new ADR and a new dev cycle before the test.
+
 ### External audit mode
 - `pnpm eval:answers --set dev --external answers.csv` takes columns `id,answer`, with answers from another bot to our questions. It makes no API calls.
 - There are no citation or latency metrics.
