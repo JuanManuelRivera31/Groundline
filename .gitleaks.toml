@@ -10,5 +10,5 @@ description = "Known non-secrets"
 regexTarget = "match"
 regexes = [
   '''test-key-not-a-real-secret''',
-  '''key["']?\s*:\s*["'](fabricated|idkCorrect|correctAnswers|citationsCorrect|latencyP95Ms)["']''',
+  '''key["']?\s*:\s*["'](fabricated|idkCorrect|correctAnswers|citationsCorrect|latencyP95Ms|modelLatencyP95Ms|responseTimeP95Ms|deliveredLatencyP95Ms|unavailableRate)["']''',
 ]
