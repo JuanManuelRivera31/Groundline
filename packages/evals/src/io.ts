@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -18,6 +19,22 @@ export const CHUNKS_FILE = join(EVAL_WORK_DIR, 'chunks.jsonl');
 export const SETS_DIR = join(REPO_ROOT, 'evals', 'plausible');
 export const RUNS_DIR = join(REPO_ROOT, 'evals', 'runs');
 export const DEV_FILE = join(SETS_DIR, 'dev.jsonl');
+export const TEST_FILE = join(SETS_DIR, 'test.jsonl');
+export const MANIFEST_FILE = join(SETS_DIR, 'MANIFEST.json');
+
+/**
+ * Reads the frozen test set for the final run only, after checking its sha256
+ * against MANIFEST.json; throws on any mismatch before the content is parsed.
+ */
+export async function readFrozenTestSet(): Promise<{ text: string; sha256: string }> {
+  const manifest = JSON.parse(await readFile(MANIFEST_FILE, 'utf8')) as { sets?: { test?: { sha256?: string } } };
+  const expected = manifest.sets?.test?.sha256;
+  if (!expected) throw new Error('MANIFEST.json has no test sha256.');
+  const text = await readFile(TEST_FILE, 'utf8');
+  const actual = createHash('sha256').update(text).digest('hex');
+  if (actual !== expected) throw new Error(`test.jsonl sha256 ${actual} does not match MANIFEST ${expected}; aborting.`);
+  return { text, sha256: actual };
+}
 
 export function loadConfig(): AppConfig {
   const envFile = join(REPO_ROOT, '.env');

@@ -10,8 +10,12 @@ import {
   parseExternalAnswers,
   proportion,
   validateJudgments,
+  cohenKappa,
+  judgeAgreement,
+  sampleForSecondJudge,
   type AnswerRecord,
   type JudgeItem,
+  type Judgment,
 } from '../src/answers.ts';
 import { mulberry32 } from '@groundline/core';
 import { calibrateFloor, floorSensitivity, type SimilarityRow } from '../src/floor.ts';
@@ -364,5 +368,64 @@ describe('external CSV', () => {
     expect(() => parseExternalAnswers('id,text\ndev-001,a', ids)).toThrow(/id,answer/);
     expect(() => parseExternalAnswers('id,answer\ntest-001,a', ids)).toThrow(/unknown question id/);
     expect(() => parseExternalAnswers('id,answer\ndev-001,a\ndev-001,b', ids)).toThrow(/duplicate/);
+  });
+});
+
+describe('second judge', () => {
+  const ids = Array.from({ length: 50 }, (_, i) => ({ id: `t-${String(i).padStart(3, '0')}` }));
+
+  it('draws a deterministic sample of n items in their original order', () => {
+    const a = sampleForSecondJudge(ids, 30, 20261126);
+    expect(a).toHaveLength(30);
+    expect(a).toEqual(sampleForSecondJudge(ids, 30, 20261126));
+    expect(a.map((x) => x.id)).toEqual([...a.map((x) => x.id)].sort());
+    expect(sampleForSecondJudge(ids, 30, 1)).not.toEqual(a);
+  });
+
+  it("computes Cohen's kappa for binary verdicts", () => {
+    expect(cohenKappa([[true, true], [false, false], [true, true], [false, false]])).toBe(1);
+    expect(cohenKappa([[true, false], [false, true]])).toBe(-1);
+    expect(cohenKappa([[true, true], [true, true]])).toBeNull();
+    expect(cohenKappa([])).toBeNull();
+  });
+
+  it('compares correct, unsupported claims and appropriate between judges', () => {
+    const item = (id: string, status: JudgeItem['status']): JudgeItem => ({
+      id,
+      mode: 'internal',
+      question: 'q',
+      expected_behavior: status === 'answered' ? 'answer' : 'abstain',
+      reference_answer: 'r',
+      key_facts: [],
+      status,
+      answer: 'a',
+      citations: [],
+      evidence: [],
+    });
+    const j = (id: string, over: Partial<Judgment>): Judgment => ({
+      id,
+      judge_model: 'x',
+      correct: null,
+      unsupported_claims: null,
+      unsupported_examples: [],
+      complete: null,
+      appropriate: null,
+      rationale: '',
+      ...over,
+    });
+    const items = [item('a1', 'answered'), item('a2', 'answered'), item('a3', 'answered'), item('n1', 'insufficient')];
+    const first = [j('a1', { correct: true, unsupported_claims: 0 }), j('a2', { correct: true, unsupported_claims: 0 }), j('a3', { correct: false, unsupported_claims: 1 }), j('n1', { appropriate: true })];
+    const second = [j('a1', { correct: true, unsupported_claims: 0 }), j('a2', { correct: false, unsupported_claims: 0 }), j('a3', { correct: false, unsupported_claims: 2 }), j('n1', { appropriate: true })];
+    const r = judgeAgreement(items, first, second);
+    expect(r).toMatchObject({ n: 4, answered: 3 });
+    expect(r.correct.agreement).toMatchObject({ hits: 2, n: 3 });
+    expect(r.unsupportedAny.agreement).toMatchObject({ hits: 3, n: 3 });
+    expect(r.unsupportedAny.kappa).toBe(1);
+    expect(r.unsupportedExact).toMatchObject({ hits: 2, n: 3 });
+    expect(r.appropriate.agreement).toMatchObject({ hits: 1, n: 1 });
+    expect(r.disagreements.map((d) => [d.id, d.field])).toEqual([
+      ['a2', 'correct'],
+      ['a3', 'unsupported_claims'],
+    ]);
   });
 });

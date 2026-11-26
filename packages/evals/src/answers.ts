@@ -1,4 +1,4 @@
-import type { AnswerResult, AnswerStatus, ModelStatus } from '@groundline/core';
+import { mulberry32, shuffled, type AnswerResult, type AnswerStatus, type ModelStatus } from '@groundline/core';
 import { distribution, quantile, stripAnchor, wilson, type Distribution, type Interval } from './metrics.ts';
 import { BEHAVIORS, type Category, type EvalQuestion, type ExpectedBehavior } from './schema.ts';
 
@@ -701,4 +701,92 @@ function quoteWordMetrics(records: readonly AnswerRecord[]): CodeMetrics['quoteW
 
 function fmtDist(d: Distribution | null): string {
   return d ? `min ${d.min} / p25 ${d.p25} / median ${d.median} / p75 ${d.p75} / max ${d.max} (n=${d.n})` : 'n/a';
+}
+
+// ---------------------------------------------------------------------------
+// Second judge (S6): agreement between two judges on a seeded sample
+
+/** A seeded sample of `n` items for a second judge, kept in their original order. */
+export function sampleForSecondJudge<T extends { readonly id: string }>(items: readonly T[], n: number, seed: number): T[] {
+  const picked = new Set(shuffled(items, mulberry32(seed)).slice(0, n).map((i) => i.id));
+  return items.filter((i) => picked.has(i.id));
+}
+
+/** Cohen's kappa for two binary raters; null when chance agreement is 1 (both constant and equal). */
+export function cohenKappa(pairs: readonly (readonly [boolean, boolean])[]): number | null {
+  const n = pairs.length;
+  if (n === 0) return null;
+  const agree = pairs.filter(([a, b]) => a === b).length / n;
+  const pa = pairs.filter(([a]) => a).length / n;
+  const pb = pairs.filter(([, b]) => b).length / n;
+  const chance = pa * pb + (1 - pa) * (1 - pb);
+  return chance === 1 ? null : (agree - chance) / (1 - chance);
+}
+
+export interface AgreementStat {
+  readonly agreement: Proportion;
+  readonly kappa: number | null;
+}
+
+export interface JudgeAgreement {
+  readonly n: number;
+  /** Items the bot answered (correct and unsupported_claims apply). */
+  readonly answered: number;
+  readonly correct: AgreementStat;
+  /** Whether each judge found at least one unsupported claim. */
+  readonly unsupportedAny: AgreementStat;
+  /** Same count of unsupported claims. */
+  readonly unsupportedExact: Proportion;
+  /** Non-answered items: same verdict on appropriate. */
+  readonly appropriate: AgreementStat;
+  readonly disagreements: readonly { readonly id: string; readonly field: string; readonly first: unknown; readonly second: unknown }[];
+}
+
+function agreementStat(pairs: readonly (readonly [boolean, boolean])[]): AgreementStat {
+  return { agreement: proportion(pairs.filter(([a, b]) => a === b).length, pairs.length), kappa: cohenKappa(pairs) };
+}
+
+/** Agreement of a second judge with the first on the items both judged. */
+export function judgeAgreement(items: readonly JudgeItem[], first: readonly Judgment[], second: readonly Judgment[]): JudgeAgreement {
+  const a = new Map(first.map((j) => [j.id, j]));
+  const b = new Map(second.map((j) => [j.id, j]));
+  const correct: [boolean, boolean][] = [];
+  const unsupported: [boolean, boolean][] = [];
+  const appropriate: [boolean, boolean][] = [];
+  let exact = 0;
+  let answered = 0;
+  const disagreements: { id: string; field: string; first: unknown; second: unknown }[] = [];
+  let n = 0;
+  for (const item of items) {
+    const x = a.get(item.id);
+    const y = b.get(item.id);
+    if (!x || !y) continue;
+    n++;
+    if (item.status === 'answered') {
+      answered++;
+      const cx = x.correct === true;
+      const cy = y.correct === true;
+      correct.push([cx, cy]);
+      if (cx !== cy) disagreements.push({ id: item.id, field: 'correct', first: x.correct, second: y.correct });
+      const ux = x.unsupported_claims ?? 0;
+      const uy = y.unsupported_claims ?? 0;
+      unsupported.push([ux > 0, uy > 0]);
+      if (ux === uy) exact++;
+      else disagreements.push({ id: item.id, field: 'unsupported_claims', first: ux, second: uy });
+    } else {
+      const px = x.appropriate === true;
+      const py = y.appropriate === true;
+      appropriate.push([px, py]);
+      if (px !== py) disagreements.push({ id: item.id, field: 'appropriate', first: x.appropriate, second: y.appropriate });
+    }
+  }
+  return {
+    n,
+    answered,
+    correct: agreementStat(correct),
+    unsupportedAny: agreementStat(unsupported),
+    unsupportedExact: proportion(exact, answered),
+    appropriate: agreementStat(appropriate),
+    disagreements,
+  };
 }

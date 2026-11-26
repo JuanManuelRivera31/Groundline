@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CandidateHit, CandidateLists } from '@groundline/db';
-import { assertSetAllowed, evaluateRetrieval, rankCandidates, runSummaryMarkdown } from '../src/retrieval.ts';
+import { assertSetAllowed, evaluateRetrieval, rankCandidates, resolveFinalSet, runSummaryMarkdown } from '../src/retrieval.ts';
 import { toQuestion, type Category } from '../src/schema.ts';
 import { answerCandidate, unanswerableCandidate } from './fixtures.ts';
 
@@ -28,6 +28,16 @@ describe('assertSetAllowed', () => {
     expect(() => {
       assertSetAllowed('dev');
     }).not.toThrow();
+  });
+});
+
+describe('resolveFinalSet', () => {
+  it('opens the test set only with --final, and --final only for the test set', () => {
+    expect(() => resolveFinalSet('test', false)).toThrow(/without --final/);
+    expect(resolveFinalSet('test', true)).toBe('test');
+    expect(resolveFinalSet('dev', false)).toBe('dev');
+    expect(() => resolveFinalSet('dev', true)).toThrow(/only to --set test/);
+    expect(() => resolveFinalSet('train', false)).toThrow(/Unknown set/);
   });
 });
 

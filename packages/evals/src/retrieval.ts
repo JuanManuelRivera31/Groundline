@@ -39,6 +39,24 @@ export function assertSetAllowed(set: string): asserts set is 'dev' {
   if (set !== 'dev') throw new Error(`Unknown set "${set}". Use --set dev.`);
 }
 
+/**
+ * The frozen-test gate (S6). `--set test` runs only as the final run command, which
+ * passes `--final` (explicit owner approval, recorded in docs/reports/s6.md); the
+ * caller must then verify the file against the MANIFEST sha256 before parsing it.
+ * Every other command keeps refusing the test set through assertSetAllowed.
+ */
+export function resolveFinalSet(set: string, final: boolean): 'dev' | 'test' {
+  if (set === 'test') {
+    if (!final) {
+      throw new Error('Refusing to run on the test set without --final: only the owner-approved final run command reads evals/plausible/test.jsonl (CLAUDE.md rule 9).');
+    }
+    return 'test';
+  }
+  if (final) throw new Error('--final applies only to --set test.');
+  assertSetAllowed(set);
+  return 'dev';
+}
+
 export interface RetrievedItem {
   readonly rank: number;
   readonly chunkId: number;

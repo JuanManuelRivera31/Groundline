@@ -1,5 +1,6 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { answerQuestion, generationLimitDefaults, maxSimilarity, mulberry32, planEmbeddings, PROMPT_VERSION, shuffled, type AppConfig } from '@groundline/core';
@@ -17,15 +18,22 @@ import {
   type AnswerRecord,
   type JudgeItem,
 } from '../answers.ts';
-import { cacheStoreFor, CHUNKS_FILE, DEV_FILE, errorMessage, loadConfig, REPO_ROOT, RUNS_DIR } from '../io.ts';
-import { assertSetAllowed } from '../retrieval.ts';
+import { cacheStoreFor, CHUNKS_FILE, DEV_FILE, errorMessage, loadConfig, readFrozenTestSet, REPO_ROOT, RUNS_DIR } from '../io.ts';
+import { resolveFinalSet } from '../retrieval.ts';
 import { parseJsonl, toJsonl, type EvalQuestion } from '../schema.ts';
 
 const SAMPLE_SEED = 20261123;
 /** Fixed seed for the realistic live arrivals (--arrival-mean-ms). */
 const ARRIVAL_SEED = 20261125;
 
-const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--prompt v3] [--model <eval primary>] [--live] [--sample N] [--arrival-mean-ms N] [--no-embed-cache] [--dry-run] [--batch-size 10] [--max-requests N] [--resume <run>.partial.jsonl] | --set dev --external answers.csv [--label name]';
+const USAGE =
+  'Final run (owner-approved, frozen config): pnpm eval:answers --set test --final --label test-35 [--model <eval primary>] [--live --sample 30 --arrival-mean-ms 12000 --no-embed-cache] [--resume <run>.partial.jsonl]\n' +
+  'Usage: pnpm eval:answers --set dev [--label name] [--prompt v3] [--model <eval primary>] [--live] [--sample N] [--arrival-mean-ms N] [--no-embed-cache] [--dry-run] [--batch-size 10] [--max-requests N] [--resume <run>.partial.jsonl] | --set dev --external answers.csv [--label name]';
+
+/** Output of a read-only git command (records which commit a final run used). */
+function git(args: readonly string[]): string {
+  return execFileSync('git', [...args], { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
+}
 
 async function freeBase(base: string): Promise<string> {
   let candidate = base;
@@ -115,6 +123,7 @@ async function main(): Promise<void> {
       prompt: { type: 'string' },
       model: { type: 'string' },
       resume: { type: 'string' },
+      final: { type: 'boolean', default: false },
       help: { type: 'boolean' },
     },
     strict: true,
@@ -124,11 +133,30 @@ async function main(): Promise<void> {
     process.exitCode = values.help ? 0 : 1;
     return;
   }
-  assertSetAllowed(values.set);
+  const set = resolveFinalSet(values.set, values.final);
+  if (set === 'test') {
+    // The final run uses the frozen configuration only and is never planned or repeated.
+    if (values.prompt !== undefined) throw new Error('--prompt is not allowed on the final run: the frozen prompt is used.');
+    if (values.external !== undefined) throw new Error('--external is not allowed on the final run.');
+    if (values['dry-run']) throw new Error('--dry-run is not allowed on the final run; check quota with a dev dry run.');
+    if (values.sample !== undefined && !values.live) throw new Error('--sample on the final run is for the live sample only (add --live).');
+  }
   const label = values.label.replace(/[^\w-]/g, '');
   const batchSize = Number(values['batch-size']);
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 50) throw new Error('--batch-size must be an integer in [1, 50].');
-  const allQuestions = parseJsonl(await readFile(DEV_FILE, 'utf8')) as EvalQuestion[];
+  let frozen: { sha256: string; commit: string } | null = null;
+  let setText: string;
+  if (set === 'test') {
+    const commit = git(['rev-parse', 'HEAD']);
+    if (git(['status', '--porcelain', '--untracked-files=no']) !== '') throw new Error('The final run needs a clean working tree (tracked files) so the run maps to one commit.');
+    const test = await readFrozenTestSet();
+    frozen = { sha256: test.sha256, commit };
+    setText = test.text;
+    console.log(`Frozen test set verified: sha256 ${test.sha256} matches MANIFEST.json | code commit ${commit}`);
+  } else {
+    setText = await readFile(DEV_FILE, 'utf8');
+  }
+  const allQuestions = parseJsonl(setText) as EvalQuestion[];
   // --sample N: a seeded subset (kept in set order), e.g. for the live-latency sample.
   let questions = allQuestions;
   if (values.sample !== undefined) {
@@ -192,7 +220,7 @@ async function main(): Promise<void> {
     const promptVersion = deps.config.promptVersion ?? PROMPT_VERSION;
     const models = runtime.generationQuotas.map((q) => q.model).join(' → ');
     console.log(
-      `Dev set: ${questions.length} questions | mode ${mode} | model${mode === 'live' ? ' chain' : ''} ${models} | prompt ${promptVersion} | floor ${deps.config.floor.toFixed(3)}` +
+      `${set === 'test' ? 'Test' : 'Dev'} set: ${questions.length} questions | mode ${mode} | model${mode === 'live' ? ' chain' : ''} ${models} | prompt ${promptVersion} | floor ${deps.config.floor.toFixed(3)}` +
         (mode === 'live'
           ? ` | budget ${config.generation.liveBudgetMs} ms | hedge after ${config.generation.hedgeAfterMs} ms | embedding cache ${embedCache ? 'on' : 'off'}`
           : ''),
@@ -225,6 +253,12 @@ async function main(): Promise<void> {
     const base = resumeFile
       ? resumeFile.replace(/\.partial\.jsonl$/, '')
       : await freeBase(join(RUNS_DIR, `${new Date().toISOString().slice(0, 10)}-answers${label ? `-${label}` : ''}`));
+    // A final run is one run per configuration and label: never start a second one, on any date.
+    if (set === 'test' && !resumeFile) {
+      if (!label) throw new Error('The final run needs --label (for example test-35).');
+      const taken = (await readdir(RUNS_DIR)).filter((f) => f.endsWith(`-answers-${label}.json`) || f.endsWith(`-answers-${label}.partial.jsonl`));
+      if (taken.length > 0) throw new Error(`A final run labelled "${label}" already exists (${taken.join(', ')}); only --resume is allowed.`);
+    }
     const partialFile = `${base}.partial.jsonl`;
     if (!resumeFile && existsSync(partialFile)) throw new Error(`${rel(partialFile)} exists; pass --resume ${rel(partialFile)}.`);
     console.log(`Checkpoint: ${rel(partialFile)}`);
@@ -282,7 +316,8 @@ async function main(): Promise<void> {
     const partial = records.length < questions.length;
     const payload = {
       kind: 'answers',
-      set: 'dev',
+      set,
+      frozenTest: frozen,
       label,
       createdAt,
       partial,
@@ -298,7 +333,7 @@ async function main(): Promise<void> {
     await writeFile(`${base}.json`, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
     await writeFile(
       `${base}.md`,
-      `# Answers run (dev${label ? `, ${label}` : ''})\n\n- Created: ${createdAt}\n- Mode: ${mode}; prompt: ${promptVersion}; model${mode === 'live' ? ' chain' : ''} ${models}${partial ? '\n- PARTIAL RUN' : ''}\n\n${codeMetricsMarkdown(metrics)}`,
+      `# Answers run (${set}${label ? `, ${label}` : ''})\n\n- Created: ${createdAt}\n- Mode: ${mode}; prompt: ${promptVersion}; model${mode === 'live' ? ' chain' : ''} ${models}${partial ? '\n- PARTIAL RUN' : ''}\n\n${codeMetricsMarkdown(metrics)}`,
       'utf8',
     );
     const dir = await writeJudgeBatches(base, records.map(judgeItemFromRecord), batchSize);

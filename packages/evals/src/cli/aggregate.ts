@@ -53,7 +53,7 @@ async function main(): Promise<void> {
   const runPath = resolve(arg);
   const base = runPath.replace(/\.json$/, '');
   const run = JSON.parse(await readFile(runPath, 'utf8')) as RunFile;
-  if (run.set !== 'dev') throw new Error('Only dev runs can be aggregated in this session.');
+  if (run.set !== 'dev' && run.set !== 'test') throw new Error(`Unknown set "${run.set}" in ${arg}.`);
 
   const items = run.kind === 'external' ? (run.items ?? []) : (run.records ?? []).map(judgeItemFromRecord);
   const dir = `${base}-judgments`;
