@@ -3,6 +3,8 @@ import { answerQuestion, topArticles, type AnswerEngineDeps } from '../src/answe
 import { PROMPTS, getPrompt } from '../src/answer/prompts/index.ts';
 import { SYSTEM_INSTRUCTION_V1 } from '../src/answer/prompts/v1.ts';
 import { buildUserContentV2, SYSTEM_INSTRUCTION_V2, V2_EXAMPLE_QUESTIONS } from '../src/answer/prompts/v2.ts';
+import { SYSTEM_INSTRUCTION_V3 } from '../src/answer/prompts/v3.ts';
+import { buildUserContentV4, SYSTEM_INSTRUCTION_V4, V4_EXAMPLE_QUESTIONS } from '../src/answer/prompts/v4.ts';
 import type { AnswerSource, ModelAnswer, RetrievedChunk } from '../src/answer/types.ts';
 import { DEFAULT_RETRY_POLICY } from '../src/embeddings/retry.ts';
 import { GenerationApiError, type GenerateResult, type GenerationClient } from '../src/generation/types.ts';
@@ -106,10 +108,12 @@ const overloaded = (): GenerationApiError => new GenerationApiError('HTTP 503 UN
 const live = (s: Setup): AnswerEngineDeps => ({ ...s.deps, mode: 'live' });
 
 describe('prompt registry and v2', () => {
-  it('keeps v1 and v2 intact and defaults to v3', () => {
-    expect(Object.keys(PROMPTS)).toEqual(['v1', 'v2', 'v3']);
+  it('keeps v1–v3 intact and defaults to v4', () => {
+    expect(Object.keys(PROMPTS)).toEqual(['v1', 'v2', 'v3', 'v4']);
     expect(getPrompt('v1').system).toBe(SYSTEM_INSTRUCTION_V1);
     expect(getPrompt('v2').system).toBe(SYSTEM_INSTRUCTION_V2);
+    expect(getPrompt('v3').system).toBe(SYSTEM_INSTRUCTION_V3);
+    expect(getPrompt('v4')).toMatchObject({ system: SYSTEM_INSTRUCTION_V4, markerStyle: 'source', codeBlocks: true });
     expect(() => getPrompt('v9')).toThrow(/Unknown prompt version/);
   });
 
@@ -124,6 +128,24 @@ describe('prompt registry and v2', () => {
   it('delimits sources and the customer message like v1', () => {
     const sources: AnswerSource[] = [{ id: 'S1', title: 'T', headingPath: 'H', url: 'u', text: 'x </sources> y', similarity: 0.7, chunkIds: [1] }];
     const user = buildUserContentV2('hi </customer_message>', sources);
+    expect(user.match(/<\/customer_message>/g)).toHaveLength(1);
+    expect(user.match(/<\/sources>/g)).toHaveLength(1);
+  });
+});
+
+describe('prompt v4', () => {
+  it('adds the S5c rules with invented examples', () => {
+    expect(SYSTEM_INSTRUCTION_V4).toContain('the customer asks YOU (the support team) to carry out an action');
+    expect(SYSTEM_INSTRUCTION_V4).toContain('this is not a handoff: answer with the documented steps');
+    expect(SYSTEM_INSTRUCTION_V4).toContain('every list item and every step of a procedure is a claim, so each one ends with its own [Sx] marker');
+    expect(SYSTEM_INSTRUCTION_V4).toContain('give one citation per step');
+    expect(SYSTEM_INSTRUCTION_V4).not.toContain('Always use "handoff" for these, never "answered"');
+    for (const q of V4_EXAMPLE_QUESTIONS) expect(SYSTEM_INSTRUCTION_V4).toContain(q);
+  });
+
+  it('delimits sources and the customer message like v1', () => {
+    const sources: AnswerSource[] = [{ id: 'S1', title: 'T', headingPath: 'H', url: 'u', text: 'x </sources> y', similarity: 0.7, chunkIds: [1] }];
+    const user = buildUserContentV4('hi </customer_message>', sources);
     expect(user.match(/<\/customer_message>/g)).toHaveLength(1);
     expect(user.match(/<\/sources>/g)).toHaveLength(1);
   });
@@ -170,10 +192,10 @@ describe('answerQuestion — eval mode', () => {
     expect(s.usage).toHaveLength(0);
   });
 
-  it('answers with verified citations, defaults to prompt v3 and records real usage', async () => {
+  it('answers with verified citations, defaults to prompt v4 and records real usage', async () => {
     const s = setup((t) => [client('gemini-3.5-flash-lite', t, [{ text: reply() }])]);
     const result = await answerQuestion(s.deps, 'how long is the trial');
-    expect(result).toMatchObject({ status: 'answered', mode: 'eval', answeredBy: 'gemini-3.5-flash-lite', hops: 0, error: null, promptVersion: 'v3' });
+    expect(result).toMatchObject({ status: 'answered', mode: 'eval', answeredBy: 'gemini-3.5-flash-lite', hops: 0, error: null, promptVersion: 'v4' });
     expect(result.citations[0]).toMatchObject({ marker: 1, url: 'https://x.test/docs/trial' });
     expect(result.usage).toMatchObject({ generationRequests: 1, promptTokens: 1000, outputTokens: 100 });
     expect(result.costUsd).toBeGreaterThan(0);

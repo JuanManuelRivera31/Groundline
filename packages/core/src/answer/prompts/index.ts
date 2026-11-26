@@ -3,6 +3,7 @@ import type { AnswerSource } from '../types.ts';
 import { buildUserContentV1, PROMPT_VERSION, SYSTEM_INSTRUCTION_V1 } from './v1.ts';
 import { buildUserContentV2, PROMPT_VERSION_V2, SYSTEM_INSTRUCTION_V2 } from './v2.ts';
 import { buildUserContentV3, PROMPT_VERSION_V3, SYSTEM_INSTRUCTION_V3 } from './v3.ts';
+import { buildUserContentV4, PROMPT_VERSION_V4, SYSTEM_INSTRUCTION_V4 } from './v4.ts';
 
 export interface PromptSpec {
   readonly version: string;
@@ -41,9 +42,17 @@ export const PROMPTS: Readonly<Record<string, PromptSpec>> = {
     responseSchema: sourceMarkerResponseSchema,
     codeBlocks: true,
   },
+  [PROMPT_VERSION_V4]: {
+    version: PROMPT_VERSION_V4,
+    system: SYSTEM_INSTRUCTION_V4,
+    buildUserContent: buildUserContentV4,
+    markerStyle: 'source',
+    responseSchema: sourceMarkerResponseSchema,
+    codeBlocks: true,
+  },
 };
 
-export const DEFAULT_PROMPT_VERSION = PROMPT_VERSION_V3;
+export const DEFAULT_PROMPT_VERSION = PROMPT_VERSION_V4;
 
 export function getPrompt(version: string): PromptSpec {
   const prompt = PROMPTS[version];
