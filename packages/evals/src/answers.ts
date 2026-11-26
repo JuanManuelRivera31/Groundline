@@ -38,6 +38,8 @@ export interface AnswerRecord {
   readonly prompt_version?: string;
   readonly answered_by?: string | null;
   readonly hops?: number;
+  /** S5d: a hedged second model was started (live mode). Absent in earlier runs. */
+  readonly hedged?: boolean;
   readonly attempts?: AnswerResult['attempts'];
   readonly retrieval_fallback?: AnswerResult['retrievalFallback'];
   readonly articles?: AnswerResult['articles'];
@@ -78,6 +80,7 @@ export function toAnswerRecord(question: EvalQuestion, result: AnswerResult): An
     prompt_version: result.promptVersion,
     answered_by: result.answeredBy,
     hops: result.hops,
+    hedged: result.hedged,
     attempts: result.attempts,
     retrieval_fallback: result.retrievalFallback,
     articles: result.articles,
@@ -148,13 +151,15 @@ export interface CodeMetrics {
   /**
    * all: every question (in live mode, the time to any response); modelCalls: questions that called the model;
    * firstAttempt: model calls without retries; delivered: responses whose status a model produced
-   * (answered_by set: floor hits and unavailable excluded).
+   * (answered_by set: floor hits and unavailable excluded); embedding: the query embedding step
+   * (records from S5d on, which store it).
    */
   readonly latencyMs: {
     readonly all: LatencySummary;
     readonly modelCalls: LatencySummary;
     readonly firstAttempt: LatencySummary;
     readonly delivered: LatencySummary;
+    readonly embedding: LatencySummary;
   };
   /** Questions whose generation needed more than one HTTP attempt (429/5xx retries). */
   readonly retriedAnswers: number;
@@ -166,8 +171,11 @@ export interface CodeMetrics {
     readonly unavailable: Proportion;
     /** Validated answers per model that produced them. */
     readonly answeredBy: Record<string, number>;
-    /** Hops (model switches) per question that called a model. */
+    /** Hops (models started minus one) per question that called a model. */
     readonly hops: Record<string, number>;
+    /** Questions where a hedged second model was started, and which model's answer was used then. */
+    readonly hedged: number;
+    readonly hedgedAnsweredBy: Record<string, number>;
     /** HTTP attempts per model and status ("local" for skipped models). */
     readonly attemptsByModel: Record<string, Record<string, number>>;
     readonly retrievalFallback: Record<string, number>;
@@ -231,6 +239,7 @@ export function computeCodeMetrics(records: readonly AnswerRecord[]): CodeMetric
       modelCalls: latencySummary(called.map((r) => r.latency.totalMs)),
       firstAttempt: latencySummary(called.filter((r) => r.usage.generationRequests === 1).map((r) => r.latency.totalMs)),
       delivered: latencySummary(records.filter((r) => r.answered_by !== null && r.answered_by !== undefined).map((r) => r.latency.totalMs)),
+      embedding: latencySummary(records.flatMap((r) => (r.latency.embeddingMs === undefined ? [] : [r.latency.embeddingMs]))),
     },
     retriedAnswers: called.filter((r) => r.usage.generationRequests > 1).length,
     queueWaitMs: records.reduce((sum, r) => sum + r.latency.queueWaitMs, 0),
@@ -361,6 +370,7 @@ export const TARGETS = {
   responseTimeP95Ms: { max: 8000, label: 'Time to any response p95 (live)' },
   deliveredLatencyP95Ms: { label: 'Model-delivered response latency p95 (live; informational)' },
   unavailableRate: { max: 0.05, label: 'Unavailable rate (live)' },
+  embeddingLatencyP95Ms: { label: 'Query embedding latency p95 (live; informational)' },
 } as const;
 
 export interface TargetRow {
@@ -382,6 +392,9 @@ export interface LiveSummary {
   readonly deliveredP95Ms: number;
   readonly deliveredN: number;
   readonly unavailable: Proportion;
+  /** p95 of the query embedding step; n = 0 for runs before S5d. */
+  readonly embeddingP95Ms: number;
+  readonly embeddingN: number;
 }
 
 export function liveSummary(m: Pick<CodeMetrics, 'latencyMs' | 'availability'>): LiveSummary {
@@ -391,6 +404,8 @@ export function liveSummary(m: Pick<CodeMetrics, 'latencyMs' | 'availability'>):
     deliveredP95Ms: m.latencyMs.delivered.p95,
     deliveredN: m.latencyMs.delivered.n,
     unavailable: m.availability.unavailable,
+    embeddingP95Ms: m.latencyMs.embedding.p95,
+    embeddingN: m.latencyMs.embedding.n,
   };
 }
 
@@ -420,6 +435,17 @@ function liveRows(live: LiveSummary, kind: 'realistic' | 'stress'): TargetRow[] 
       target: stress ? '—' : '≤ 5%',
       met: stress ? null : live.unavailable.n > 0 && live.unavailable.value <= TARGETS.unavailableRate.max,
     },
+    ...(live.embeddingN > 0
+      ? [
+          {
+            key: 'embeddingLatencyP95Ms' as const,
+            label: `Query embedding latency p95 (live, ${stress ? 'stress burst' : 'realistic arrivals'}, n=${live.embeddingN}; informational)`,
+            value: live.embeddingP95Ms,
+            target: '—',
+            met: null,
+          },
+        ]
+      : []),
   ];
 }
 
@@ -616,9 +642,9 @@ export function codeMetricsMarkdown(m: CodeMetrics): string {
     `- Quotes verified: ${ci(m.quotes.verified)}; invalid by reason: ${JSON.stringify(m.quotes.invalidByReason)}.`,
     `- Removed sentences: failed citation ${m.removedSentences.failedCitation}, unmarked claim ${m.removedSentences.unmarkedClaim}; downgraded to insufficient (no valid citation): ${m.downgradedNoValidCitations}; invalid output: ${m.invalidOutput}.`,
     `- Floor hits by expected behavior: ${JSON.stringify(m.floorHits)}.`,
-    `- Latency (eval: excl. queue wait; live: time to any response, incl. queue wait) all: p50 ${(m.latencyMs.all.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.all.p95 / 1000).toFixed(2)} s, max ${(m.latencyMs.all.max / 1000).toFixed(2)} s; model calls only: p50 ${(m.latencyMs.modelCalls.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.modelCalls.p95 / 1000).toFixed(2)} s; model calls without retries (n=${m.latencyMs.firstAttempt.n}): p95 ${(m.latencyMs.firstAttempt.p95 / 1000).toFixed(2)} s; model-delivered responses (n=${m.latencyMs.delivered.n}): p95 ${(m.latencyMs.delivered.p95 / 1000).toFixed(2)} s. Answers that needed retries: ${m.retriedAnswers}. Queue wait total ${(m.queueWaitMs / 1000).toFixed(1)} s.`,
+    `- Latency (eval: excl. queue wait; live: time to any response, incl. queue wait) all: p50 ${(m.latencyMs.all.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.all.p95 / 1000).toFixed(2)} s, max ${(m.latencyMs.all.max / 1000).toFixed(2)} s; model calls only: p50 ${(m.latencyMs.modelCalls.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.modelCalls.p95 / 1000).toFixed(2)} s; model calls without retries (n=${m.latencyMs.firstAttempt.n}): p95 ${(m.latencyMs.firstAttempt.p95 / 1000).toFixed(2)} s; model-delivered responses (n=${m.latencyMs.delivered.n}): p95 ${(m.latencyMs.delivered.p95 / 1000).toFixed(2)} s; query embedding (n=${m.latencyMs.embedding.n}): p50 ${(m.latencyMs.embedding.p50 / 1000).toFixed(2)} s, p95 ${(m.latencyMs.embedding.p95 / 1000).toFixed(2)} s. Answers that needed retries: ${m.retriedAnswers}. Queue wait total ${(m.queueWaitMs / 1000).toFixed(1)} s.`,
     `- Tokens per model call (mean): prompt ${m.tokens.meanPrompt.toFixed(0)}, output ${m.tokens.meanOutput.toFixed(0)}, thoughts ${m.tokens.meanThoughts.toFixed(0)}.`,
-    `- Availability: unavailable ${ci(m.availability.unavailable)}; answered by ${JSON.stringify(m.availability.answeredBy)}; hops ${JSON.stringify(m.availability.hops)}; attempts by model/status ${JSON.stringify(m.availability.attemptsByModel)}; retrieval fallback ${JSON.stringify(m.availability.retrievalFallback)}.`,
+    `- Availability: unavailable ${ci(m.availability.unavailable)}; answered by ${JSON.stringify(m.availability.answeredBy)}; hops ${JSON.stringify(m.availability.hops)}; hedged ${m.availability.hedged} (answered by ${JSON.stringify(m.availability.hedgedAnsweredBy)}); attempts by model/status ${JSON.stringify(m.availability.attemptsByModel)}; retrieval fallback ${JSON.stringify(m.availability.retrievalFallback)}.`,
     `- Quote words: all ${fmtDist(m.quoteWords.all)}; valid ${fmtDist(m.quoteWords.valid)}; >40 words: ${m.quoteWords.over40}, >80 words: ${m.quoteWords.over80}.`,
     `- Equivalent cost at list price: ${m.costUsd.meanPerConversation === null ? 'n/a' : `$${m.costUsd.meanPerConversation.toFixed(6)} per conversation, $${(m.costUsd.total ?? 0).toFixed(4)} total`} (free tier: $0).`,
   ];
@@ -633,6 +659,8 @@ const bump = (map: Record<string, number>, key: string): void => {
 function availabilityMetrics(records: readonly AnswerRecord[]): CodeMetrics['availability'] {
   const answeredBy: Record<string, number> = {};
   const hops: Record<string, number> = {};
+  const hedgedAnsweredBy: Record<string, number> = {};
+  let hedged = 0;
   const attemptsByModel: Record<string, Record<string, number>> = {};
   const retrievalFallback: Record<string, number> = {};
   for (const r of records) {
@@ -640,15 +668,21 @@ function availabilityMetrics(records: readonly AnswerRecord[]): CodeMetrics['ava
     if (r.usage.generationRequests === 0 && (r.attempts ?? []).length === 0) continue;
     if (r.answered_by) bump(answeredBy, r.answered_by);
     bump(hops, String(r.hops ?? 0));
+    if (r.hedged) {
+      hedged++;
+      bump(hedgedAnsweredBy, r.answered_by ?? 'none');
+    }
     for (const a of r.attempts ?? []) {
       const byStatus = (attemptsByModel[a.model] ??= {});
-      bump(byStatus, a.status === null ? `local:${a.outcome}` : String(a.status));
+      bump(byStatus, a.status === null ? `local:${a.outcome}` : a.outcome === 'cancelled' ? 'cancelled' : String(a.status));
     }
   }
   return {
     unavailable: proportion(records.filter((r) => r.status === 'unavailable').length, records.length),
     answeredBy,
     hops,
+    hedged,
+    hedgedAnsweredBy,
     attemptsByModel,
     retrievalFallback,
   };

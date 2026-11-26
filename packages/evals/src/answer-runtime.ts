@@ -79,6 +79,8 @@ export async function createAnswerRuntime(
     readonly promptVersion?: string | undefined;
     /** Eval mode: measure this model instead of the chain's primary. */
     readonly primaryModel?: string | undefined;
+    /** Live mode only: false skips cached query embeddings and embeds every question live (default true). */
+    readonly embedCache?: boolean | undefined;
   },
 ): Promise<AnswerRuntime> {
   const emb = config.embedding;
@@ -111,7 +113,8 @@ export async function createAnswerRuntime(
     const plan = await planEmbeddings(cache, emb, [question], 'RETRIEVAL_QUERY');
     const key = plan.keys[0] ?? '';
     const cached = plan.cached.get(key);
-    if (cached) return cached;
+    const skipCache = opts.mode === 'live' && options.embedCache === false;
+    if (cached && !skipCache) return cached;
     const client = createEmbeddingClient(config);
     if (!client) throw new Error('GEMINI_API_KEY is not set and the question is not cached.');
     if (opts.mode === 'live') {
@@ -186,6 +189,7 @@ export async function createAnswerRuntime(
         maxOutputTokens: gen.maxOutputTokens,
         promptVersion: options.promptVersion ?? config.answer.promptVersion,
         liveBudgetMs: gen.liveBudgetMs,
+        hedgeAfterMs: gen.hedgeAfterMs,
       },
       embedQuery,
       retrieve,

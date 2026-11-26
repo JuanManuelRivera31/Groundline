@@ -166,6 +166,29 @@ describe('live time and availability summary', () => {
     expect(m.latencyMs.delivered).toMatchObject({ n: 2, max: 3000 });
     expect(m.latencyMs.all).toMatchObject({ n: 4, max: 7520 });
     expect(liveSummary(m)).toMatchObject({ n: 4, deliveredN: 2, responseP95Ms: m.latencyMs.all.p95, unavailable: { hits: 1, n: 4 } });
+    // Records before S5d store no embedding time.
+    expect(liveSummary(m)).toMatchObject({ embeddingN: 0 });
+  });
+
+  it('counts hedged questions, their winners, cancelled attempts and the embedding latency (S5d)', () => {
+    const lat = (totalMs: number, embeddingMs: number) => ({ retrievalMs: embeddingMs + 10, embeddingMs, generationMs: totalMs - embeddingMs - 10, totalMs, queueWaitMs: 0 });
+    const m = computeCodeMetrics([
+      record('h1', 'answer', 'answered', {
+        mode: 'live',
+        answered_by: 'm2',
+        hops: 1,
+        hedged: true,
+        latency: lat(4200, 400),
+        attempts: [
+          { model: 'm2', status: 200, outcome: 'ok', ms: 1000 },
+          { model: 'm1', status: 0, outcome: 'cancelled', ms: 4000 },
+        ],
+      }),
+      record('h2', 'answer', 'answered', { mode: 'live', answered_by: 'm1', hops: 0, hedged: false, latency: lat(1500, 600), attempts: [{ model: 'm1', status: 200, outcome: 'ok', ms: 1000 }] }),
+    ]);
+    expect(m.availability).toMatchObject({ hedged: 1, hedgedAnsweredBy: { m2: 1 }, attemptsByModel: { m1: { cancelled: 1, '200': 1 }, m2: { '200': 1 } } });
+    expect(m.latencyMs.embedding).toMatchObject({ n: 2, max: 600 });
+    expect(liveSummary(m)).toMatchObject({ embeddingN: 2 });
   });
 });
 
@@ -263,7 +286,7 @@ describe('judgments and aggregate', () => {
 
   it('computes the target metrics', () => {
     const { judgments } = validateJudgments(items, good);
-    const live = { n: 30, responseP95Ms: 9100, deliveredP95Ms: 4000, deliveredN: 20, unavailable: proportion(1, 30) };
+    const live = { n: 30, responseP95Ms: 9100, deliveredP95Ms: 4000, deliveredN: 20, unavailable: proportion(1, 30), embeddingP95Ms: 0, embeddingN: 0 };
     const result = aggregate(items, judgments, computeCodeMetrics(records), live);
     const byKey = Object.fromEntries(result.targets.map((t) => [t.key, t]));
     expect(byKey.fabricated?.value).toMatchObject({ hits: 2, n: 3 });
@@ -284,18 +307,22 @@ describe('judgments and aggregate', () => {
 
   it('checks realistic live runs against the targets and keeps stress runs informational', () => {
     const { judgments } = validateJudgments(items, good);
-    const realistic = { n: 30, responseP95Ms: 7600, deliveredP95Ms: 5000, deliveredN: 25, unavailable: proportion(2, 30) };
-    const burst = { n: 30, responseP95Ms: 9000, deliveredP95Ms: 6000, deliveredN: 20, unavailable: proportion(6, 30) };
-    const rows = aggregate(items, judgments, computeCodeMetrics(records), realistic, burst).targets.slice(-6);
+    // The realistic run embedded every question live (S5d): its embedding latency is an informational row.
+    const realistic = { n: 30, responseP95Ms: 7600, deliveredP95Ms: 5000, deliveredN: 25, unavailable: proportion(2, 30), embeddingP95Ms: 900, embeddingN: 30 };
+    const burst = { n: 30, responseP95Ms: 9000, deliveredP95Ms: 6000, deliveredN: 20, unavailable: proportion(6, 30), embeddingP95Ms: 0, embeddingN: 0 };
+    const rows = aggregate(items, judgments, computeCodeMetrics(records), realistic, burst).targets.slice(-7);
     expect(rows.map((t) => [t.key, t.met])).toEqual([
       ['responseTimeP95Ms', true],
       ['deliveredLatencyP95Ms', null],
       ['unavailableRate', false],
+      ['embeddingLatencyP95Ms', null],
       ['responseTimeP95Ms', null],
       ['deliveredLatencyP95Ms', null],
       ['unavailableRate', null],
     ]);
-    expect(rows[3]?.label).toContain('stress burst');
+    expect(rows[3]).toMatchObject({ value: 900, target: '—' });
+    expect(rows[3]?.label).toContain('Query embedding latency p95 (live, realistic arrivals, n=30');
+    expect(rows[4]?.label).toContain('stress burst');
     expect(rows[0]?.label).toContain('realistic arrivals, n=30');
   });
 

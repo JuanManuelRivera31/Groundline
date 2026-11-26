@@ -25,7 +25,7 @@ const SAMPLE_SEED = 20261123;
 /** Fixed seed for the realistic live arrivals (--arrival-mean-ms). */
 const ARRIVAL_SEED = 20261125;
 
-const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--prompt v3] [--model <eval primary>] [--live] [--sample N] [--arrival-mean-ms N] [--dry-run] [--batch-size 10] [--max-requests N] [--resume <run>.partial.jsonl] | --set dev --external answers.csv [--label name]';
+const USAGE = 'Usage: pnpm eval:answers --set dev [--label name] [--prompt v3] [--model <eval primary>] [--live] [--sample N] [--arrival-mean-ms N] [--no-embed-cache] [--dry-run] [--batch-size 10] [--max-requests N] [--resume <run>.partial.jsonl] | --set dev --external answers.csv [--label name]';
 
 async function freeBase(base: string): Promise<string> {
   let candidate = base;
@@ -51,6 +51,7 @@ function configSummary(config: AppConfig): Record<string, unknown> {
     generationModel: g.model,
     modelChain: g.models,
     liveBudgetMs: g.liveBudgetMs,
+    hedgeAfterMs: g.hedgeAfterMs,
     promptVersion: config.answer.promptVersion,
     temperature: g.temperature,
     maxOutputTokens: g.maxOutputTokens,
@@ -110,6 +111,7 @@ async function main(): Promise<void> {
       live: { type: 'boolean', default: false },
       sample: { type: 'string' },
       'arrival-mean-ms': { type: 'string' },
+      'no-embed-cache': { type: 'boolean', default: false },
       prompt: { type: 'string' },
       model: { type: 'string' },
       resume: { type: 'string' },
@@ -144,6 +146,10 @@ async function main(): Promise<void> {
     if (!Number.isInteger(arrivalMeanMs) || arrivalMeanMs < 1 || arrivalMeanMs > 600_000) throw new Error('--arrival-mean-ms must be an integer in [1, 600000].');
   }
 
+  // --no-embed-cache: embed every question live (within the budget, full-text fallback) instead of reading the cache.
+  const embedCache = !values['no-embed-cache'];
+  if (!embedCache && !values.live) throw new Error('--no-embed-cache needs --live.');
+
   if (values.external) {
     await runExternal(questions, values.external, label, batchSize);
     return;
@@ -159,7 +165,7 @@ async function main(): Promise<void> {
   }
   const db = new PgDb(config.databaseUrl);
   try {
-    const runtime = await createAnswerRuntime(config, db, { embedKind: 'embed_query_eval', mode, promptVersion: values.prompt, primaryModel: values.model });
+    const runtime = await createAnswerRuntime(config, db, { embedKind: 'embed_query_eval', mode, promptVersion: values.prompt, primaryModel: values.model, embedCache });
     const { deps } = runtime;
 
     // Checkpoint: every record is appended to <base>.partial.jsonl as soon as it exists,
@@ -187,12 +193,15 @@ async function main(): Promise<void> {
     const models = runtime.generationQuotas.map((q) => q.model).join(' → ');
     console.log(
       `Dev set: ${questions.length} questions | mode ${mode} | model${mode === 'live' ? ' chain' : ''} ${models} | prompt ${promptVersion} | floor ${deps.config.floor.toFixed(3)}` +
-        (mode === 'live' ? ` | budget ${config.generation.liveBudgetMs} ms` : ''),
+        (mode === 'live'
+          ? ` | budget ${config.generation.liveBudgetMs} ms | hedge after ${config.generation.hedgeAfterMs} ms | embedding cache ${embedCache ? 'on' : 'off'}`
+          : ''),
     );
     console.log(`Floor will short-circuit ${floorHits} cached questions (${plan.misses.length} not cached yet).`);
     console.log(`Generation requests needed: up to ${generationNeeded} (+ retries on 429/5xx${mode === 'live' ? ' / hops' : ''})`);
     for (const q of runtime.generationQuotas) console.log(`  remaining today (${q.model}): ${q.remaining} of ${q.limit}`);
-    console.log(`Embedding requests needed: ${plan.misses.length} | remaining today (${e.model}): ${e.remaining} of ${e.limit}`);
+    const embeddingNeeded = embedCache ? plan.misses.length : todo.length;
+    console.log(`Embedding requests needed: ${embeddingNeeded} | remaining today (${e.model}): ${e.remaining} of ${e.limit}`);
     // Offsets for the whole sample (stable across resumes); a resumed run keeps the gaps between the remaining questions.
     const offsets = arrivalMeanMs === null ? null : arrivalOffsets(questions.length, arrivalMeanMs, mulberry32(ARRIVAL_SEED));
     if (offsets) console.log(`Arrivals: exponential gaps, mean ${arrivalMeanMs} ms, seed ${ARRIVAL_SEED}; about ${((offsets.at(-1) ?? 0) / 60_000).toFixed(1)} min of arrivals for the full sample.`);
@@ -210,7 +219,7 @@ async function main(): Promise<void> {
     } else if (generationNeeded > g.remaining) {
       throw new Error(`Not enough generation quota: need ${generationNeeded}, ${g.remaining} remain today. Use --max-requests N to run until the cap.`);
     }
-    if (plan.misses.length > e.remaining) throw new Error(`Not enough embedding quota: need ${plan.misses.length}, ${e.remaining} remain today.`);
+    if (embeddingNeeded > e.remaining) throw new Error(`Not enough embedding quota: need ${embeddingNeeded}, ${e.remaining} remain today.`);
 
     await mkdir(RUNS_DIR, { recursive: true });
     const base = resumeFile
@@ -250,7 +259,8 @@ async function main(): Promise<void> {
         console.log(
           `[${String(i + 1).padStart(2)}/${questions.length}] ${q.id} ${q.expected_behavior.padEnd(7)} -> ${record.status.padEnd(12)}` +
             `${record.floor_hit ? ' (floor)' : ''} ${(record.latency.totalMs / 1000).toFixed(2)} s` +
-            (record.answered_by && mode === 'live' ? ` by ${record.answered_by}${record.hops ? ` (${record.hops} hop)` : ''}` : '') +
+            (record.answered_by && mode === 'live' ? ` by ${record.answered_by}${record.hops ? ` (${record.hops} hop)` : ''}${record.hedged ? ' [hedged]' : ''}` : '') +
+            (mode === 'live' && !embedCache ? ` | embed ${((record.latency.embeddingMs ?? 0) / 1000).toFixed(2)} s` : '') +
             (record.error ? ` [${record.error.slice(0, 80)}]` : ''),
         );
       } catch (error) {
@@ -278,6 +288,7 @@ async function main(): Promise<void> {
       partial,
       mode,
       sample: values.sample === undefined ? null : { n: questions.length, seed: SAMPLE_SEED },
+      embedCache,
       arrivals: offsets ? { meanMs: arrivalMeanMs, seed: ARRIVAL_SEED, offsetsMs: offsets, startedMs, resumed: resumeFile !== undefined } : null,
       promptVersion,
       config: configSummary(config),
