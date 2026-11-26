@@ -11,8 +11,11 @@ import {
   proportion,
   validateJudgments,
   cohenKappa,
+  isJudgedFailure,
   judgeAgreement,
   sampleForSecondJudge,
+  stratifiedSecondJudgeSample,
+  verdictAgreement,
   type AnswerRecord,
   type JudgeItem,
   type Judgment,
@@ -387,6 +390,40 @@ describe('second judge', () => {
     expect(cohenKappa([[true, false], [false, true]])).toBe(-1);
     expect(cohenKappa([[true, true], [true, true]])).toBeNull();
     expect(cohenKappa([])).toBeNull();
+  });
+
+  it('draws every first-judge failure plus a seeded sample of passing items, and scores the overall verdict', () => {
+    const mk = (id: string, over: Partial<Judgment>): Judgment => ({
+      id,
+      judge_model: 'x',
+      correct: null,
+      unsupported_claims: null,
+      unsupported_examples: [],
+      complete: null,
+      appropriate: null,
+      rationale: '',
+      ...over,
+    });
+    const items = Array.from({ length: 40 }, (_, i) => judgeItemFromRecord(record(`s-${String(i).padStart(2, '0')}`, 'answer', 'answered')));
+    const first = items.map((it, i) =>
+      i === 3 ? mk(it.id, { correct: false, unsupported_claims: 0 }) : i === 7 ? mk(it.id, { correct: true, unsupported_claims: 1 }) : i === 9 ? mk(it.id, { appropriate: false }) : mk(it.id, { correct: true, unsupported_claims: 0 }),
+    );
+    expect(first.filter(isJudgedFailure).map((j) => j.id)).toEqual(['s-03', 's-07', 's-09']);
+    const strata = stratifiedSecondJudgeSample(items, first, 20, 20261127);
+    expect(strata.failures).toEqual(['s-03', 's-07', 's-09']);
+    expect(strata.correct).toHaveLength(20);
+    expect(strata.correct.some((id) => strata.failures.includes(id))).toBe(false);
+    expect(stratifiedSecondJudgeSample(items, first, 20, 20261127)).toEqual(strata);
+    // The second judge confirms two failures, clears one and fails one passing item.
+    const second = first.map((j) => (j.id === 's-07' ? { ...j, unsupported_claims: 0 } : j.id === strata.correct[0] ? { ...j, correct: false } : j));
+    const all = [...strata.failures, ...strata.correct];
+    const v = verdictAgreement(all, first, second);
+    expect(v.agreement).toMatchObject({ hits: 21, n: 23 });
+    expect(v.disagreements).toEqual([
+      { id: 's-07', first: 'fail', second: 'pass' },
+      { id: strata.correct[0], first: 'pass', second: 'fail' },
+    ]);
+    expect(v.kappa).toBeCloseTo((21 / 23 - ((3 / 23) * (3 / 23) + (20 / 23) * (20 / 23))) / (1 - ((3 / 23) * (3 / 23) + (20 / 23) * (20 / 23))), 10);
   });
 
   it('compares correct, unsupported claims and appropriate between judges', () => {

@@ -26,6 +26,8 @@ The test set loses its value if it is run twice, if the configuration changes be
 - **Second judge.** `pnpm eval:second-judge <run.json>` draws a seeded sample of 30 items (seed 20261126) for a second, larger judge (Claude Opus), with the same rubric. Both judges are Claude models, so they come from a different model family than the Gemini models that write the answers. `--compare` reports agreement with the first judge:
   - on `correct` and on `unsupported_claims` (any claim, and the same count), with Cohen's kappa;
   - on `appropriate` for non-answered items.
+  - `--stratified` draws a second sample: every first-judge failure plus 20 seeded passes (seed 20261127), mixed in run order. Agreement is reported per stratum, because a random sample with few failures cannot test agreement on them.
+  - The second judge is a check only. The official figures stay the first judge's, and discrepancies are reported as they are.
 - **Live sample.** 30 test questions with the fixed sample seed and realistic arrivals (mean 12 s, seed 20261125). It uses `--no-embed-cache`, the model chain and the hedge, at US peak hours.
 - **Nothing is tuned after test is read.** Results are reported as they are in `evals/plausible/REPORT.md` and `docs/reports/s6.md`, including misses. The human audit of `audit_sample.csv` stays pending until the owner provides it.
 

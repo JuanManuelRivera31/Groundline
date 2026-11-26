@@ -790,3 +790,50 @@ export function judgeAgreement(items: readonly JudgeItem[], first: readonly Judg
     disagreements,
   };
 }
+
+/** The first judge counted this item as a failure: incorrect, with an unsupported claim, or not appropriate. */
+export function isJudgedFailure(j: Judgment): boolean {
+  return j.correct === false || (j.unsupported_claims ?? 0) > 0 || j.appropriate === false;
+}
+
+/**
+ * Stratified second-judge sample: every item the first judge counted as a failure,
+ * plus `nCorrect` seeded items it counted as passing. Ids are returned per stratum.
+ */
+export function stratifiedSecondJudgeSample(
+  items: readonly JudgeItem[],
+  first: readonly Judgment[],
+  nCorrect: number,
+  seed: number,
+): { failures: string[]; correct: string[] } {
+  const byId = new Map(first.map((j) => [j.id, j]));
+  const failures = items.filter((i) => {
+    const j = byId.get(i.id);
+    return j !== undefined && isJudgedFailure(j);
+  });
+  const failed = new Set(failures.map((i) => i.id));
+  const passing = items.filter((i) => byId.has(i.id) && !failed.has(i.id));
+  return { failures: failures.map((i) => i.id), correct: sampleForSecondJudge(passing, Math.min(nCorrect, passing.length), seed).map((i) => i.id) };
+}
+
+/** Agreement on the overall verdict (failure vs pass, as in isJudgedFailure) between two judges. */
+export function verdictAgreement(
+  ids: readonly string[],
+  first: readonly Judgment[],
+  second: readonly Judgment[],
+): AgreementStat & { readonly disagreements: readonly { readonly id: string; readonly first: 'fail' | 'pass'; readonly second: 'fail' | 'pass' }[] } {
+  const a = new Map(first.map((j) => [j.id, j]));
+  const b = new Map(second.map((j) => [j.id, j]));
+  const pairs: [boolean, boolean][] = [];
+  const disagreements: { id: string; first: 'fail' | 'pass'; second: 'fail' | 'pass' }[] = [];
+  for (const id of ids) {
+    const x = a.get(id);
+    const y = b.get(id);
+    if (!x || !y) continue;
+    const fx = isJudgedFailure(x);
+    const fy = isJudgedFailure(y);
+    pairs.push([fx, fy]);
+    if (fx !== fy) disagreements.push({ id, first: fx ? 'fail' : 'pass', second: fy ? 'fail' : 'pass' });
+  }
+  return { ...agreementStat(pairs), disagreements };
+}

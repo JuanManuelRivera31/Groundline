@@ -40,7 +40,7 @@ Groundline is a reusable AI support-agent kit. It answers customer questions **o
 | `pnpm eval:answers --set dev --model gemini-3.1-flash-lite --label v4-31` | Eval run with another chain model as primary (per-model quality) |
 | `pnpm eval:aggregate <run.json> [--live <live-run.json>] [--stress <burst-run.json>]` | Validate judgments and merge code + judge metrics against the targets (time to response and availability from the realistic live run; stress rows informational) |
 | `pnpm eval:answers --set test --final --label test-35 [--model …] [--live --sample 30 --arrival-mean-ms 12000 --no-embed-cache]` | **Final run only, with explicit owner approval (ADR-0011):** checks test.jsonl against the MANIFEST sha256, needs a clean tree, records the commit, one run per label (`--resume` only) |
-| `pnpm eval:second-judge <run.json> [--n 30]` / `--compare` | Seeded sample for a second judge (Opus, rubric v1); `--compare` reports agreement on correct, unsupported_claims and appropriate |
+| `pnpm eval:second-judge <run.json> [--n 30 \| --stratified --n-correct 20 --name opus-strat]` / `--compare [--name …]` | Seeded sample (random, or all first-judge failures + seeded passes) for a second judge (Opus, rubric v1); `--compare` reports agreement per stratum on the verdict, correct, unsupported_claims and appropriate, with Cohen's κ |
 
 Node 26 runs the TypeScript sources directly (type stripping), so there is no compile step for the CLIs.
 
