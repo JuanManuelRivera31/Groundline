@@ -30,7 +30,7 @@ describe('parseConfig', () => {
     expect(config.generation).toMatchObject({
       model: 'gemini-3.5-flash-lite',
       models: ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
-      liveBudgetMs: 8000,
+      liveBudgetMs: 7500,
       modelsWithDefaultLimits: ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
       temperature: 0,
       maxOutputTokens: 1024,
@@ -38,7 +38,7 @@ describe('parseConfig', () => {
       schemaField: 'responseJsonSchema',
       limits: { rpm: 10, tpm: 100_000, rpd: 200 },
     });
-    expect(config.answer).toEqual({ candidates: 20, sources: 6, floor: 0.6, retrievalMode: 'vector', promptVersion: 'v3' });
+    expect(config.answer).toEqual({ candidates: 20, sources: 6, floor: 0.6, retrievalMode: 'vector', promptVersion: 'v4' });
     expect(generationLimitDefaults(config)).toEqual(['GEN_RPM', 'GEN_TPM', 'GEN_RPD']);
     expect(generationLimitDefaults(parseConfig({ GEN_RPM: '5', GEN_TPM: '1000', GEN_RPD: '50' }))).toEqual([]);
   });

@@ -83,8 +83,9 @@ export const DEFAULTS = {
   GEN_MODEL: 'gemini-3.5-flash-lite',
   GEN_MODELS: 'gemini-3.5-flash-lite,gemini-3.1-flash-lite',
   GEN_LIMITS: '',
-  GEN_LIVE_BUDGET_MS: 8000,
-  ANSWER_PROMPT_VERSION: 'v3',
+  // 7.5 s leaves a network margin under the 8 s time-to-response target (ADR-0010, S5c).
+  GEN_LIVE_BUDGET_MS: 7500,
+  ANSWER_PROMPT_VERSION: 'v4',
   GEN_TEMPERATURE: '0',
   GEN_MAX_OUTPUT_TOKENS: 1024,
   GEN_THINKING_LEVEL: 'MINIMAL',

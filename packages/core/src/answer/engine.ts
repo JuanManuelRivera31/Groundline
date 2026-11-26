@@ -73,7 +73,7 @@ export interface AnswerEngineDeps {
   readonly usageKind?: string | undefined;
 }
 
-export const DEFAULT_LIVE_BUDGET_MS = 8_000;
+export const DEFAULT_LIVE_BUDGET_MS = 7_500;
 /** Below this remaining time a new live attempt is not started. */
 export const MIN_ATTEMPT_MS = 300;
 const ARTICLES = 3;
