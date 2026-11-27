@@ -31,7 +31,9 @@
     "eval:aggregate": "node packages/evals/src/cli/aggregate.ts",
     "eval:revalidate": "node packages/evals/src/cli/revalidate.ts",
     "eval:second-judge": "node packages/evals/src/cli/second-judge.ts",
-    "dev:api": "node apps/api/src/node/server.ts"
+    "dev:api": "node apps/api/src/node/server.ts",
+    "build:worker": "pnpm --dir apps/api exec wrangler deploy --dry-run --outdir ../../data/worker-build",
+    "dev:worker": "pnpm --dir apps/api exec wrangler dev --local"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

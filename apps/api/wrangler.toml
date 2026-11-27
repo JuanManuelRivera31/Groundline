@@ -1,0 +1,30 @@
+# Cloudflare Workers config for the Groundline demo API (ADR-0013).
+# S4a only bundles it locally (pnpm build:worker = wrangler deploy --dry-run).
+# Deployment, the Hyperdrive config and secrets come in S4c.
+name = "groundline-api"
+main = "src/worker.ts"
+# nodejs_compat is on by default from 2026-08-04, so no compatibility_flags are needed.
+compatibility_date = "2026-11-24"
+# No usage telemetry to Cloudflare from this project.
+send_metrics = false
+
+# Daily retention (ADR-0012): delete conversations older than RETENTION_DAYS.
+[triggers]
+crons = ["0 3 * * *"]
+
+# Non-secret settings. Secrets (GEMINI_API_KEY, IP_HASH_SECRET, ADMIN_TOKEN,
+# HANDOFF_WEBHOOK_SECRET, DATABASE_URL when not using Hyperdrive) are set with
+# `wrangler secret put <NAME>`, never here.
+[vars]
+CORS_ORIGINS = ""
+DEMO_DAILY_GEN_CAP = "150"
+RATE_LIMIT_PER_MINUTE = "3"
+RATE_LIMIT_PER_DAY = "15"
+MAX_QUESTION_CHARS = "500"
+RETENTION_DAYS = "30"
+
+# S4c: create with caching disabled, so quota and rate-limit counts are never stale:
+#   wrangler hyperdrive create groundline-neon --connection-string="<direct Neon URL, sslmode=require>" --caching-disabled
+# [[hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "<hyperdrive config id>"
