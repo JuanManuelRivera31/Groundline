@@ -69,6 +69,16 @@ describe('POST /v1/ask', () => {
     expect(h.store.demoRequests).toHaveLength(1);
   });
 
+  it('refuses a body that is not valid UTF-8 (e.g. a CP1252 shell argument)', async () => {
+    const h = harness();
+    // '{"question":"¿Cómo?"}' encoded as Windows-1252: 0xBF and 0xF3 are not valid UTF-8 here.
+    const cp1252 = new Uint8Array([...new TextEncoder().encode('{"question":"'), 0xbf, 0x43, 0xf3, 0x6d, 0x6f, 0x3f, ...new TextEncoder().encode('"}')]);
+    const res = await h.request('/v1/ask', { method: 'POST', headers: { 'content-type': 'application/json' }, body: cp1252 });
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toMatchObject({ code: 'invalid_encoding' });
+    expect(h.store.demoRequests).toHaveLength(0);
+  });
+
   it('rejects bodies over 8 KB', async () => {
     const h = harness();
     const res = await h.request('/v1/ask', { method: 'POST', headers: { 'content-type': 'application/json', 'content-length': '9000' }, body: JSON.stringify({ question: 'x'.repeat(9000) }) });

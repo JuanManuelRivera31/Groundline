@@ -59,16 +59,32 @@ function apiError(code: string, message: string, extra: Record<string, unknown> 
   return { error: { code, message, ...extra } };
 }
 
-type JsonBody = { ok: true; value: Record<string, unknown> } | { ok: false };
+type JsonBody = { ok: true; value: Record<string, unknown> } | { ok: false; code: 'invalid_json' | 'invalid_encoding' };
 
+const utf8 = new TextDecoder('utf-8', { fatal: true });
+
+/**
+ * Parses a JSON object body. Invalid UTF-8 is refused rather than decoded with
+ * replacement characters, so garbled text never reaches the model or the database.
+ */
 async function readJsonObject(c: Context): Promise<JsonBody> {
+  let text: string;
   try {
-    const value: unknown = JSON.parse(await c.req.text());
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) return { ok: false };
+    text = utf8.decode(await c.req.arrayBuffer());
+  } catch {
+    return { ok: false, code: 'invalid_encoding' };
+  }
+  try {
+    const value: unknown = JSON.parse(text);
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return { ok: false, code: 'invalid_json' };
     return { ok: true, value: value as Record<string, unknown> };
   } catch {
-    return { ok: false };
+    return { ok: false, code: 'invalid_json' };
   }
+}
+
+function bodyError(code: 'invalid_json' | 'invalid_encoding', example: string): { error: Record<string, unknown> } {
+  return code === 'invalid_encoding' ? apiError(code, 'The request body must be UTF-8.') : apiError(code, `Send a JSON object: ${example}.`);
 }
 
 /** Length in Unicode code points (what a person counts as characters, emoji aside). */
@@ -172,7 +188,7 @@ export function createApp(deps: AppDeps): Hono<ApiEnv> {
   app.post('/v1/ask', async (c) => {
     const startedAt = deps.now();
     const body = await readJsonObject(c);
-    if (!body.ok) return c.json(apiError('invalid_json', 'Send a JSON object: {"question": "...", "lang": "en"}.'), 400);
+    if (!body.ok) return c.json(bodyError(body.code, '{"question": "...", "lang": "en"}'), 400);
     const { question: rawQuestion, lang: rawLang } = body.value;
     if (typeof rawQuestion !== 'string') return c.json(apiError('invalid_request', '"question" must be a string.'), 400);
     if (rawLang !== undefined && typeof rawLang !== 'string') return c.json(apiError('invalid_request', '"lang" must be a string.'), 400);
@@ -214,7 +230,7 @@ export function createApp(deps: AppDeps): Hono<ApiEnv> {
 
   app.post('/v1/handoff', async (c) => {
     const body = await readJsonObject(c);
-    if (!body.ok) return c.json(apiError('invalid_json', 'Send a JSON object: {"conversation_id": "..."}.'), 400);
+    if (!body.ok) return c.json(bodyError(body.code, '{"conversation_id": "..."}'), 400);
     const { conversation_id: conversationId, note: rawNote } = body.value;
     if (typeof conversationId !== 'string' || !UUID.test(conversationId)) return c.json(apiError('invalid_request', '"conversation_id" must be a conversation id.'), 400);
     if (rawNote !== undefined && rawNote !== null && typeof rawNote !== 'string') return c.json(apiError('invalid_request', '"note" must be a string.'), 400);
