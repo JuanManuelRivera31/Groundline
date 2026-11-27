@@ -34,3 +34,4 @@ export * from './answer/prompts/v2.ts';
 export * from './answer/prompts/v3.ts';
 export * from './answer/prompts/v4.ts';
 export * from './answer/prompts/index.ts';
+export * from './privacy/redact.ts';
