@@ -29,7 +29,8 @@
     "eval:answers": "node packages/evals/src/cli/eval-answers.ts",
     "eval:aggregate": "node packages/evals/src/cli/aggregate.ts",
     "eval:revalidate": "node packages/evals/src/cli/revalidate.ts",
-    "eval:second-judge": "node packages/evals/src/cli/second-judge.ts"
+    "eval:second-judge": "node packages/evals/src/cli/second-judge.ts",
+    "dev:api": "node apps/api/src/node/server.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

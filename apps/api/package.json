@@ -1,0 +1,22 @@
+{
+  "name": "@groundline/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Public demo API (Hono): one code base for Node (local) and Cloudflare Workers.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@groundline/core": "workspace:*",
+    "@groundline/db": "workspace:*",
+    "@groundline/evals": "workspace:*",
+    "@hono/node-server": "2.1.11",
+    "hono": "4.13.22"
+  },
+  "devDependencies": {
+    "wrangler": "4.168.0"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // DOM supplies the web globals shared by Node and Workers (fetch, Request,
+    // crypto.subtle); node types are only for src/node and the tests.
+    "lib": ["ES2024", "DOM"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src", "test"]
+}
