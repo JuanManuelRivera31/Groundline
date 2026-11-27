@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit && pnpm -r run typecheck",
     "test": "vitest run",
+    "test:db": "node scripts/test-db.ts",
     "build": "pnpm -r run build",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
