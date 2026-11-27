@@ -1,4 +1,3 @@
-import { setTimeout as delay } from 'node:timers/promises';
 import {
   DEFAULT_RETRY_POLICY,
   embedMisses,
@@ -13,12 +12,13 @@ import {
   type AnswerMode,
   type AppConfig,
   type EmbedQueryOptions,
+  type EmbeddingClient,
   type GenerationClient,
   type GenerationTarget,
   type RetrievedChunk,
 } from '@groundline/core';
 import type { Db } from '@groundline/db';
-import { cacheStoreFor, createEmbeddingClient, usageRecorderFor } from './io.ts';
+import { cacheStoreFor, createEmbeddingClient, usageRecorderFor } from './runtime-io.ts';
 
 const clock = { now: (): number => Date.now() };
 
@@ -27,7 +27,13 @@ const clock = { now: (): number => Date.now() };
  * backoff spends fewer quota-counted attempts per burst than the embedding one.
  */
 export const GENERATION_RETRY_POLICY = { baseDelayMs: 5_000, maxDelayMs: 120_000 } as const;
-const sleep = (ms: number): Promise<void> => delay(ms);
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The Db methods the answer engine needs (the API store implements the same subset). */
+export type AnswerRuntimeDb = Pick<
+  Db,
+  'getCachedEmbeddings' | 'putCachedEmbeddings' | 'recordApiUsage' | 'sumApiRequestsSince' | 'searchVector' | 'searchFullText' | 'searchCandidates'
+>;
 
 export interface QuotaStatus {
   readonly model: string;
@@ -36,7 +42,7 @@ export interface QuotaStatus {
   readonly remaining: number;
 }
 
-export async function quotaToday(db: Db, model: string, rpd: number): Promise<QuotaStatus> {
+export async function quotaToday(db: Pick<Db, 'sumApiRequestsSince'>, model: string, rpd: number): Promise<QuotaStatus> {
   const used = await db.sumApiRequestsSince(new Date(pacificDayStart(Date.now())), model);
   return { model, used, limit: rpd, remaining: Math.max(0, rpd - used) };
 }
@@ -72,7 +78,7 @@ export function createGenerationClient(config: AppConfig, model: string = config
  */
 export async function createAnswerRuntime(
   config: AppConfig,
-  db: Db,
+  db: AnswerRuntimeDb,
   options: {
     readonly embedKind: string;
     readonly mode?: AnswerMode | undefined;
@@ -81,6 +87,11 @@ export async function createAnswerRuntime(
     readonly primaryModel?: string | undefined;
     /** Live mode only: false skips cached query embeddings and embeds every question live (default true). */
     readonly embedCache?: boolean | undefined;
+    /** Tests only: replace the Gemini clients with offline fakes. */
+    readonly clients?: {
+      readonly generation?: ((model: string) => GenerationClient) | undefined;
+      readonly embedding?: EmbeddingClient | undefined;
+    } | undefined;
   },
 ): Promise<AnswerRuntime> {
   const emb = config.embedding;
@@ -100,7 +111,7 @@ export async function createAnswerRuntime(
       client: {
         model,
         generate: (request) => {
-          client ??= createGenerationClient(config, model);
+          client ??= options.clients?.generation?.(model) ?? createGenerationClient(config, model);
           if (!client) return Promise.reject(new Error('GEMINI_API_KEY is not set; cannot call the generation model.'));
           return client.generate(request);
         },
@@ -115,7 +126,7 @@ export async function createAnswerRuntime(
     const cached = plan.cached.get(key);
     const skipCache = opts.mode === 'live' && options.embedCache === false;
     if (cached && !skipCache) return cached;
-    const client = createEmbeddingClient(config);
+    const client = options.clients?.embedding ?? createEmbeddingClient(config);
     if (!client) throw new Error('GEMINI_API_KEY is not set and the question is not cached.');
     if (opts.mode === 'live') {
       // One attempt within the live budget: no backoff, no waiting for the minute window.

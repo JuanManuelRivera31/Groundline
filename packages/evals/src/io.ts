@@ -2,16 +2,10 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import {
-  GeminiEmbeddingClient,
-  parseConfig,
-  type AppConfig,
-  type EmbeddingCacheStore,
-  type EmbeddingClient,
-  type UsageRecorder,
-} from '@groundline/core';
-import type { Db } from '@groundline/db';
+import { parseConfig, type AppConfig } from '@groundline/core';
 import { parseJsonl, type ChunkRef } from './schema.ts';
+
+export { cacheStoreFor, createEmbeddingClient, usageRecorderFor } from './runtime-io.ts';
 
 export const REPO_ROOT = resolve(import.meta.dirname, '..', '..', '..');
 export const EVAL_WORK_DIR = join(REPO_ROOT, 'data', 'eval-work');
@@ -40,26 +34,6 @@ export function loadConfig(): AppConfig {
   const envFile = join(REPO_ROOT, '.env');
   if (existsSync(envFile)) process.loadEnvFile(envFile);
   return parseConfig(process.env);
-}
-
-export function createEmbeddingClient(config: AppConfig): EmbeddingClient | undefined {
-  if (!config.geminiApiKey) return undefined;
-  return new GeminiEmbeddingClient({
-    apiKey: config.geminiApiKey,
-    model: config.embedding.model,
-    dimensions: config.embedding.dimensions,
-    maxBatchSize: config.embedding.batchSize,
-    requestShape: config.embedding.requestShape,
-    fetch: (url, init) => fetch(url, { ...init, signal: init.signal ?? null }),
-  });
-}
-
-export function cacheStoreFor(db: Db): EmbeddingCacheStore {
-  return { getMany: (keys) => db.getCachedEmbeddings(keys), putMany: (entries) => db.putCachedEmbeddings(entries) };
-}
-
-export function usageRecorderFor(db: Db): UsageRecorder {
-  return { record: (event) => db.recordApiUsage({ ...event, ingestRunId: null }) };
 }
 
 export async function loadChunkRefs(file: string = CHUNKS_FILE): Promise<ChunkRef[]> {
