@@ -2,7 +2,7 @@
 
 A reusable AI support-agent kit. It answers customer questions **only** from a company's documentation, cites the source of every claim, says "I don't know" and offers a human hand-off when the evidence is not enough, and ships with a measured accuracy report. Each client gets their own deployment.
 
-> Status: session 1 — repository scaffold, database, ingestion and retrieval debugging. The answering API, widget, admin and evals come next.
+> Status: the answer engine is measured on a frozen test set ([accuracy report](evals/plausible/REPORT.md)). Session S4a added the demo API with its protections; the widget, admin panel and deployment come next.
 
 ## Requirements
 
@@ -24,11 +24,29 @@ pnpm search:debug "How do I cancel my subscription?"
 pnpm chunks:stats --source plausible
 ```
 
-Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test` (offline; Gemini is faked).
+Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test` (offline; Gemini is faked), and `pnpm test:db` (against the local Postgres).
+
+## Demo API
+
+```sh
+pnpm dev:api                  # http://127.0.0.1:8787
+curl -s localhost:8787/v1/health
+curl -s -X POST localhost:8787/v1/ask -H 'content-type: application/json' \
+  --data-binary '{"question": "How do I exclude my own visits?"}'
+```
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /v1/ask {question, lang?}` | Grounded answer with `[n]` citations, sources, `handoff_offered` and a conversation id |
+| `POST /v1/handoff {conversation_id, note?}` | Records a hand-off case without asking for personal data; optional webhook in real deployments |
+| `GET /v1/health` | Liveness and database check |
+| `GET /v1/admin/{conversations,handoffs,gaps,daily}` | Read-only admin views (`Authorization: Bearer ADMIN_TOKEN`) |
+
+Demo protections: 3 questions per minute and 15 per day per IP (stored only as a daily-salted hash), at most 500 characters, a daily AI budget per model with an articles-only fallback, redaction of emails, phone numbers, card numbers and IP addresses before the model and before storage, no Gemini call from the EEA, Switzerland or the UK, and 30-day retention. See [ADR-0012](docs/adr/0012-demo-api-and-protections.md) and [ADR-0013](docs/adr/0013-workers-and-neon-deployment.md).
 
 ## Privacy
 
-The Gemini free tier may use submitted content to improve Google's products. Only public documentation is embedded; never send personal data through this kit while it uses the free tier.
+The Gemini free tier may use submitted content to improve Google's products. Only public documentation is embedded. Customer questions are redacted (emails, phone numbers, card-shaped numbers, IP addresses) before they reach the model or the database, IP addresses are never stored, and conversations are deleted after 30 days. Redaction is pattern-based, so the demo still tells visitors not to share personal data.
 
 ## Architecture
 
